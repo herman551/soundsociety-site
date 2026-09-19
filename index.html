@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound Society</title>
+<meta name="description" content="Sound Society, Inc. designs, manages, and maintains post-production sound studios for film and television.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2316161A'/%3E%3Crect x='7' y='14' width='3' height='11' rx='1.5' fill='%23E0A43B'/%3E%3Crect x='12.5' y='8' width='3' height='17' rx='1.5' fill='%23E0A43B'/%3E%3Crect x='18' y='11' width='3' height='14' rx='1.5' fill='%23E0A43B'/%3E%3Crect x='23.5' y='17' width='3' height='8' rx='1.5' fill='%23E0A43B'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #F6F4F0;
+    --surface: #FFFFFF;
+    --ink: #16161A;
+    --muted: #55555F;
+    --line: #E3DFD8;
+    --accent: #9A5B00;
+    --meter: #C98A1E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0E0E11;
+      --surface: #17171C;
+      --ink: #EDEDF0;
+      --muted: #A3A3AE;
+      --line: #2A2A31;
+      --accent: #E8B04F;
+      --meter: #E0A43B;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E0E11; --surface: #17171C; --ink: #EDEDF0; --muted: #A3A3AE;
+    --line: #2A2A31; --accent: #E8B04F; --meter: #E0A43B;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+  @media (min-width: 720px) { .wrap { padding: 0 32px; } }
+
+  header { padding: 28px 0 0; }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: .02em; }
+  .brand svg { flex: none; }
+
+  .hero { padding: 72px 0 64px; }
+  .meter { display: flex; align-items: flex-end; gap: 6px; height: 44px; margin-bottom: 28px; }
+  .meter span { width: 6px; border-radius: 3px; background: var(--meter); opacity: .9; }
+  h1 {
+    margin: 0;
+    font-size: clamp(34px, 6vw, 58px);
+    line-height: 1.08;
+    letter-spacing: -.02em;
+    max-width: 16ch;
+  }
+  .lede { margin: 22px 0 0; max-width: 44ch; font-size: clamp(18px, 2.2vw, 21px); color: var(--muted); }
+
+  h2 {
+    margin: 0 0 20px;
+    font-size: 13px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  section { padding: 44px 0; border-top: 1px solid var(--line); }
+
+  .services { display: grid; gap: 16px; }
+  @media (min-width: 760px) { .services { grid-template-columns: repeat(3, 1fr); } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 20px; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--muted); }
+
+  .also { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+  .also p { margin: 0; max-width: 52ch; }
+  .also strong { font-size: 20px; display: block; margin-bottom: 4px; }
+  .button {
+    display: inline-block;
+    padding: 11px 20px;
+    border-radius: 999px;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .button:hover { background: var(--ink); color: var(--bg); }
+
+  .about { margin: 0; max-width: 60ch; font-size: 19px; }
+  .contact p { margin: 0 0 6px; font-size: 20px; }
+  .contact a { color: var(--ink); text-decoration-color: var(--meter); text-underline-offset: 4px; }
+
+  footer { padding: 32px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="currentColor"/>
+        <rect x="7" y="14" width="3" height="11" rx="1.5" fill="var(--meter)"/>
+        <rect x="12.5" y="8" width="3" height="17" rx="1.5" fill="var(--meter)"/>
+        <rect x="18" y="11" width="3" height="14" rx="1.5" fill="var(--meter)"/>
+        <rect x="23.5" y="17" width="3" height="8" rx="1.5" fill="var(--meter)"/>
+      </svg>
+      Sound Society
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="meter" aria-hidden="true">
+        <span style="height:38%"></span><span style="height:62%"></span><span style="height:88%"></span>
+        <span style="height:70%"></span><span style="height:100%"></span><span style="height:76%"></span>
+        <span style="height:54%"></span><span style="height:82%"></span><span style="height:46%"></span>
+        <span style="height:30%"></span>
+      </div>
+      <h1>Post-production sound studios, built right and kept running.</h1>
+      <p class="lede">Sound Society designs, manages, and maintains post-production sound studios for film and television.</p>
+    </div>
+
+    <section aria-labelledby="services">
+      <h2 id="services">What we do</h2>
+      <div class="services">
+        <div class="card">
+          <h3>Design</h3>
+          <p>Post-production sound rooms planned from the first layout to a studio that's ready for sessions.</p>
+        </div>
+        <div class="card">
+          <h3>Management</h3>
+          <p>Running the studio and its systems day to day, so the rooms are ready when the work arrives.</p>
+        </div>
+        <div class="card">
+          <h3>Maintenance</h3>
+          <p>Keeping the equipment and systems in working order, and catching problems before they reach a session.</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="about">
+      <h2 id="about">About</h2>
+      <p class="about">Sound Society, Inc. is owned and run by Justin Herman. We work with film and television facilities that need their post-production sound rooms designed, run, and kept in shape.</p>
+    </section>
+
+    <section aria-labelledby="also">
+      <h2 id="also">Also from Sound Society</h2>
+      <div class="also">
+        <p><strong>Accordia</strong>A chord-pad instrument for iPhone and iPad: big pads, a sustain pedal, and a whole song under your fingers.</p>
+        <a class="button" href="https://playaccordia.com/">About Accordia</a>
+      </div>
+    </section>
+
+    <section class="contact" aria-labelledby="contact">
+      <h2 id="contact">Contact</h2>
+      <p><a href="mailto:justin@soundsociety.la">justin@soundsociety.la</a></p>
+    </section>
+  </main>
+
+  <footer>© 2026 Sound Society, Inc.</footer>
+</div>
+</body>
+</html>
