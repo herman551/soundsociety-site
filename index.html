@@ -89,10 +89,33 @@
 
   .about { margin: 0; max-width: 60ch; font-size: 19px; }
   .contact p { margin: 0 0 6px; font-size: 20px; }
+  .contact address { margin: 16px 0 0; font-style: normal; font-size: 17px;
+    color: var(--muted); line-height: 1.55; }
   .contact a { color: var(--ink); text-decoration-color: var(--meter); text-underline-offset: 4px; }
 
   footer { padding: 32px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Sound Society, Inc",
+  "legalName": "Sound Society, Inc",
+  "url": "https://soundsociety.la",
+  "duns": "021170440",
+  "email": "justin@soundsociety.la",
+  "telephone": "+1-310-569-0832",
+  "founder": {"@type": "Person", "name": "Justin Herman"},
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "7381 La Tijera Blvd # 45453",
+    "addressLocality": "Los Angeles",
+    "addressRegion": "CA",
+    "postalCode": "90045",
+    "addressCountry": "US"
+  }
+}
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -155,6 +178,12 @@
     <section class="contact" aria-labelledby="contact">
       <h2 id="contact">Contact</h2>
       <p><a href="mailto:justin@soundsociety.la">justin@soundsociety.la</a></p>
+      <p><a href="tel:+13105690832">310-569-0832</a></p>
+      <address>
+        Sound Society, Inc<br>
+        7381 La Tijera Blvd # 45453<br>
+        Los Angeles, CA 90045
+      </address>
     </section>
   </main>
 
