@@ -1,0 +1,19 @@
+{
+  "name": "house-alarm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Whole-house alarm clock: a Cloudflare Worker that starts music on a Sonos player on a schedule.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261114.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0",
+    "wrangler": "^4.162.0"
+  }
+}

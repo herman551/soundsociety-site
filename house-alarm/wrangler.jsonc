@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "house-alarm",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // One Durable Object holds the alarms, the Sonos tokens and the timer that
+  // wakes the Worker at the right moment. SQLite-backed objects run on the
+  // free plan.
+  "durable_objects": {
+    "bindings": [{ "name": "CLOCK", "class_name": "AlarmClock" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AlarmClock"] }],
+  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
+  "observability": { "enabled": true }
+}

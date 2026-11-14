@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>House Alarm</title>
+<meta name="theme-color" content="#f7f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131211" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="House Alarm">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style nonce="__NONCE__">
+:root {
+  color-scheme: light dark;
+  --paper: #f7f4ef; --card: #ffffff; --ink: #1d1b18; --muted: #6d675f; --line: #e6e0d6;
+  --accent: #c2410c; --accent-ink: #ffffff; --soft: #f1ece4; --warn-bg: #fff4e0; --warn-ink: #7a4a00;
+  --bad-bg: #fdecea; --bad-ink: #8f1d14; --ring-a: #2a2f5c; --ring-b: #c2410c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #131211; --card: #1d1b19; --ink: #f3eee7; --muted: #a59e94; --line: #2d2a27;
+    --accent: #ff8a4c; --accent-ink: #1b0f06; --soft: #26231f; --warn-bg: #33270f; --warn-ink: #ffd591;
+    --bad-bg: #3a1614; --bad-ink: #ffb4ab;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+main {
+  max-width: 520px; margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 48px);
+}
+h1, h2, h3, p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+.center { text-align: center; }
+
+.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.top h1 { font-size: 15px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.icon-btn {
+  width: 44px; height: 44px; margin-right: -10px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: none; color: var(--muted);
+}
+.icon-btn:active { background: var(--soft); }
+.icon-btn svg { width: 22px; height: 22px; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 20px; }
+.hero { padding: 26px 22px 22px; }
+.eyebrow { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.clock { font-size: 68px; line-height: 1.05; font-weight: 300; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin: 6px 0 4px; }
+.clock small { font-size: 22px; font-weight: 500; letter-spacing: 0; margin-left: 6px; color: var(--muted); }
+.hero h2 { font-size: 24px; font-weight: 600; line-height: 1.2; margin: 8px 0 6px; }
+.hero .when { font-size: 17px; }
+.hero .what { margin-top: 2px; }
+
+.hero.ringing { border: 0; color: #fff; background: linear-gradient(160deg, var(--ring-a), var(--ring-b) 85%); }
+.hero.ringing .eyebrow, .hero.ringing .muted { color: rgb(255 255 255 / .8); }
+.hero.ringing .eyebrow::before {
+  content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%;
+  background: #fff; animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: .25; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .hero.ringing .eyebrow::before { animation: none; } }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.actions.one { grid-template-columns: 1fr; }
+.btn {
+  min-height: 52px; padding: 0 18px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--card); font-weight: 600; font-size: 17px;
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .55; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { color: var(--bad-ink); }
+.btn.big { min-height: 64px; font-size: 19px; }
+.actions .btn { padding: 0 10px; font-size: 18px; white-space: nowrap; }
+.hero.ringing .btn { border: 0; background: rgb(255 255 255 / .18); color: #fff; }
+.hero.ringing .btn.primary { background: #fff; color: #1d1b18; }
+.link {
+  display: block; width: 100%; margin-top: 12px; padding: 10px; border: 0; background: none;
+  color: inherit; text-decoration: underline; text-underline-offset: 3px; font-size: 15px; opacity: .9;
+}
+
+.notice { border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; font-size: 15px; background: var(--warn-bg); color: var(--warn-ink); }
+.notice.bad { background: var(--bad-bg); color: var(--bad-ink); }
+.notice button { border: 0; background: none; padding: 0; margin-left: 6px; font-weight: 650; text-decoration: underline; color: inherit; }
+
+.section { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 4px 10px; }
+.section h3 { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.list { display: grid; gap: 10px; }
+.alarm { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 0; overflow: hidden; }
+.alarm .open { text-align: left; border: 0; background: none; padding: 16px 8px 16px 20px; min-width: 0; }
+.alarm .time { font-size: 34px; line-height: 1.1; font-weight: 350; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.alarm .time small { font-size: 15px; font-weight: 500; margin-left: 4px; color: var(--muted); letter-spacing: 0; }
+.alarm .meta { color: var(--muted); font-size: 15px; }
+.alarm.off .time, .alarm.off .meta { opacity: .45; }
+.alarm .skip { grid-column: 1 / -1; padding: 10px 20px; border-top: 1px solid var(--line); background: var(--soft); font-size: 14px; color: var(--muted); }
+.alarm .skip button { border: 0; background: none; padding: 0; margin-left: 6px; font-weight: 650; color: var(--accent); }
+
+.switch { position: relative; width: 84px; height: 72px; display: grid; place-items: center; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.switch span { width: 52px; height: 32px; border-radius: 16px; background: var(--line); position: relative; transition: background .15s; }
+.switch span::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .3); transition: transform .15s;
+}
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(20px); }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.add { width: 100%; margin-top: 10px; border-style: dashed; background: none; color: var(--muted); }
+
+.section .status { font-size: 13px; color: var(--muted); }
+.section .status button { border: 0; background: none; padding: 0 0 0 8px; color: var(--accent); font-weight: 650; font-size: 13px; }
+.grp { padding: 16px 18px 8px; }
+.grp-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.grp-top h4 { margin: 0; font-size: 17px; font-weight: 650; }
+.grp-top .now { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.grp-top .now.live { color: var(--accent); }
+.pill { min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--paper); font-weight: 600; font-size: 14px; white-space: nowrap; }
+.pill:disabled { opacity: .5; }
+.spk { display: grid; grid-template-columns: minmax(84px, 30%) 1fr 30px; align-items: center; gap: 10px; min-height: 48px; }
+.who { text-align: left; border: 0; background: none; padding: 8px 0; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: underline dotted var(--muted); text-underline-offset: 4px; }
+.spk output { text-align: right; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.spk .fixed { grid-column: 2 / -1; font-size: 14px; color: var(--muted); }
+.grp-top h4 .who { font: inherit; padding: 0; }
+.spk.solo { grid-template-columns: 1fr 30px; }
+.spk.solo .fixed { grid-column: 1 / -1; }
+.grp.offline { padding-bottom: 16px; }
+.grp.offline .spk { grid-template-columns: 1fr auto; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.checks { display: grid; gap: 2px; }
+.checks label { display: flex; align-items: center; gap: 12px; min-height: 44px; font-weight: 500; }
+.checks input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+
+details { margin-top: 28px; }
+summary { cursor: pointer; padding: 6px 4px; font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.log { list-style: none; margin: 8px 0 0; padding: 4px 18px; }
+.log li { padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; display: grid; grid-template-columns: 92px 1fr; gap: 10px; }
+.log li:first-child { border-top: 0; }
+.log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.log .warn { color: var(--warn-ink); }
+.log .error { color: var(--bad-ink); }
+
+dialog {
+  border: 0; padding: 0; margin: auto auto 0; width: 100%; max-width: 520px; max-height: 92dvh;
+  border-radius: 22px 22px 0 0; background: var(--card); color: var(--ink); overflow: auto;
+}
+dialog::backdrop { background: rgb(0 0 0 / .5); }
+@media (min-width: 600px) { dialog { margin: auto; border-radius: 22px; } }
+.sheet { padding: 8px 20px calc(env(safe-area-inset-bottom) + 20px); }
+.sheet-top { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 12px 0; background: var(--card); }
+.sheet-top h2 { font-size: 19px; font-weight: 650; }
+.sheet-top button { border: 0; background: none; padding: 8px 0; font-weight: 600; color: var(--accent); font-size: 17px; }
+.field { padding: 14px 0; border-top: 1px solid var(--line); }
+.field:first-of-type { border-top: 0; }
+.field > label, .field > .label { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; margin-bottom: 8px; }
+.field .value { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.field .hint { margin-top: 8px; font-size: 14px; color: var(--muted); }
+.field h3 { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+input[type=text], input[type=password], input[type=time], input[type=date], select {
+  width: 100%; min-height: 48px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--paper); font-size: 17px; appearance: none; -webkit-appearance: none;
+}
+select {
+  padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 19px) 21px, calc(100% - 14px) 21px; background-size: 5px 5px; background-repeat: no-repeat;
+}
+input[type=time].big-time { min-height: 72px; font-size: 40px; font-weight: 300; text-align: center; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; height: 36px; margin: 0; accent-color: var(--accent); }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.days button { aspect-ratio: 1; max-height: 52px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper); font-weight: 600; padding: 0; }
+.days button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.check { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.check .switch { width: 52px; height: 36px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stack { display: grid; gap: 10px; margin-top: 18px; }
+.away { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+.away button { border: 0; background: none; color: var(--bad-ink); font-weight: 600; padding: 8px 0 8px 12px; }
+
+#toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px); transform: translate(-50%, 20px);
+  max-width: min(480px, calc(100vw - 32px)); padding: 12px 16px; border-radius: 14px; background: var(--ink); color: var(--paper);
+  font-size: 15px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 10;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+.login { margin-top: 18vh; }
+.login h2 { font-size: 26px; font-weight: 600; margin-bottom: 6px; }
+.login form { display: grid; gap: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<main id="app"><p class="muted center">Loading…</p></main>
+<dialog id="sheet"></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script nonce="__NONCE__">
+"use strict";
+const app = document.getElementById("app");
+const sheet = document.getElementById("sheet");
+const toastEl = document.getElementById("toast");
+
+let S = null;            // what the server last told us
+let lastJson = "";       // to skip re-rendering when nothing changed
+let view = "loading";    // loading | login | setup | main
+let setupMessage = "";
+let skew = 0;            // server clock minus this device's clock
+let choices = null;      // Sonos favorites
+let choicesAt = 0;
+let pollTimer = 0;
+let V = null;            // the Speakers panel: groups, volumes, what the watcher found
+let lastView = "";
+let viewTimer = 0;
+let dragging = false;    // a volume slider is being moved; do not redraw under the finger
+
+const GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
+
+// ---------------------------------------------------------------- helpers
+
+/** Build an element. Text always goes in as text, never as markup. */
+function el(tag, props, ...kids) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props || {})) {
+    if (value == null || value === false) continue;
+    if (key === "class") node.className = value;
+    else if (key === "text") node.textContent = value;
+    else if (key === "html") node.innerHTML = value; // only ever our own constants
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else if (key === "value" || key === "checked" || key === "disabled" || key === "selected" || key === "open") node[key] = value;
+    else node.setAttribute(key, value === true ? "" : value);
+  }
+  for (const kid of kids.flat(3)) if (kid != null && kid !== false) node.append(kid);
+  return node;
+}
+
+let toastTimer = 0;
+function toast(message) {
+  toastEl.textContent = message;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 4500);
+}
+
+async function api(method, path, body) {
+  let res;
+  try {
+    res = await fetch(path, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new Error("Can't reach the alarm clock. Check your connection.");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== "/api/login") {
+    view = "login";
+    render();
+    throw new Error("Please sign in.");
+  }
+  if (res.status === 503 && data.setup) {
+    view = "setup";
+    setupMessage = data.error;
+    render();
+    throw new Error(data.error);
+  }
+  if (!res.ok) throw new Error(data.error || "Something went wrong.");
+  return data;
+}
+
+/** Run a button's action: disable it while it works, and say so if it fails. */
+async function act(button, fn) {
+  if (button) button.disabled = true;
+  try {
+    await fn();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function take(data) {
+  const { now, ...rest } = data;
+  skew = now - Date.now();
+  S = data;
+  view = "main";
+  const j = JSON.stringify(rest);
+  if (j !== lastJson) {
+    lastJson = j;
+    render();
+  }
+  schedulePoll();
+}
+
+async function refresh() {
+  try {
+    take(await api("GET", "/api/state"));
+  } catch (e) {
+    if (view === "loading") app.replaceChildren(el("p", { class: "muted center", text: e.message }));
+    schedulePoll();
+  }
+}
+
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  if (document.hidden || view === "login" || view === "setup") return;
+  pollTimer = setTimeout(refresh, S && S.session ? 3000 : 15000);
+}
+
+/** Take a fresh Speakers panel from the server, redrawing only if something changed. */
+function takeView(data) {
+  V = data;
+  const j = JSON.stringify({ ...data, health: { ...data.health, checkedAt: 0 } });
+  if (j !== lastView && !dragging) {
+    lastView = j;
+    render();
+  }
+}
+async function refreshView() {
+  clearTimeout(viewTimer);
+  if (document.hidden || view !== "main" || !S || !S.sonos.connected) return;
+  try {
+    if (!dragging) takeView(await api("GET", "/api/speakers"));
+  } catch {
+    /* the next round will try again */
+  }
+  viewTimer = setTimeout(refreshView, 20000);
+}
+/** One of the Speakers panel's controls. */
+async function manage(action, body) {
+  takeView(await api("POST", `/api/speakers/${action}`, body || {}));
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return clearTimeout(pollTimer), clearTimeout(viewTimer);
+  refresh().then(refreshView);
+});
+// Keep "in 7 h 12 min" honest between polls.
+setInterval(() => { if (view === "main" && !document.hidden && !sheet.open && !dragging) render(); }, 30000);
+
+const serverNow = () => Date.now() + skew;
+const tz = () => (S && S.config.timezone) || undefined;
+
+/** "06:45" → { time: "6:45", period: "AM" } in the reader's own format. */
+function clockParts(hh, mm) {
+  const parts = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZone: "UTC" })
+    .formatToParts(new Date(Date.UTC(2000, 0, 1, hh, mm)));
+  const period = (parts.find((p) => p.type === "dayPeriod") || {}).value || "";
+  const time = parts.filter((p) => p.type !== "dayPeriod").map((p) => p.value).join("").trim();
+  return { time, period };
+}
+function clockNode(cls, hhmm) {
+  const [hh, mm] = hhmm.split(":").map(Number);
+  const { time, period } = clockParts(hh, mm);
+  return el("div", { class: cls }, time, period && el("small", { text: period }));
+}
+function clockText(hhmm) {
+  const [hh, mm] = hhmm.split(":").map(Number);
+  const { time, period } = clockParts(hh, mm);
+  return period ? `${time} ${period}` : time;
+}
+const hhmmAt = (t) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: tz() }).format(new Date(t));
+const timeAt = (t) => clockText(hhmmAt(t));
+const dateOf = (t) => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: tz() }).format(new Date(t));
+function dayName(iso, long) {
+  if (iso === S.today) return "Today";
+  if (iso === S.tomorrow) return "Tomorrow";
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Intl.DateTimeFormat(undefined, long ? { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" } : { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })
+    .format(new Date(Date.UTC(y, m - 1, d)));
+}
+function countdown(t) {
+  const mins = Math.max(0, Math.round((t - serverNow()) / 60000));
+  if (mins < 1) return "any moment now";
+  if (mins < 60) return `in ${mins} min`;
+  if (mins < 24 * 60) return `in ${Math.floor(mins / 60)} h ${mins % 60} min`;
+  const days = Math.round(mins / 1440);
+  return `in ${days} day${days === 1 ? "" : "s"}`;
+}
+const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function speakersText(a) {
+  const all = Object.keys(S.config.speakers);
+  if (all.length < 2) return "";
+  if (a.playerIds.length === all.length) return "Everywhere";
+  return a.playerIds.map((id) => (S.config.speakers[id] || {}).name || "Unknown speaker").join(", ");
+}
+function ago(t) {
+  const mins = Math.round((serverNow() - t) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  return `${dayName(dateOf(t)).replace(/,.*/, "")} ${timeAt(t)}`;
+}
+function daysText(a) {
+  const d = a.days;
+  if (!d.length) return a.enabled && a.onDate ? `Once · ${dayName(a.onDate)}` : "Once";
+  if (d.length === 7) return "Every day";
+  if (d.join() === "1,2,3,4,5") return "Weekdays";
+  if (d.join() === "0,6") return "Weekends";
+  return d.map((i) => DAY_NAMES[i]).join(", ");
+}
+
+// ---------------------------------------------------------------- main view
+
+function render() {
+  if (view === "login") return renderLogin();
+  if (view === "setup") return app.replaceChildren(el("div", { class: "login" }, el("h2", { text: "Almost there" }), el("p", { class: "muted", text: setupMessage })));
+  if (!S) return;
+  // Go through `el` so that sections which are switched off (false, null) are dropped, not printed.
+  app.replaceChildren(...el("div", {},
+    el("div", { class: "top" },
+      el("h1", { text: "House Alarm" }),
+      el("button", { class: "icon-btn", "aria-label": "Settings", html: GEAR, onclick: openSettings })),
+    notices(),
+    hero(),
+    S.sonos.connected && alarmList(),
+    S.sonos.connected && speakersPanel(),
+    activity(),
+  ).childNodes);
+}
+
+function notices() {
+  const out = [];
+  if (S.sonos.connected && S.sonos.broken) {
+    out.push(el("div", { class: "notice bad" }, "Sonos has signed this app out, so alarms can't ring.",
+      el("button", { text: "Reconnect", onclick: () => (location.href = "/oauth/start") })));
+  }
+  // What the watcher has found that would stop an alarm. Lesser things sit with the speakers.
+  for (const p of S.health.problems) {
+    if (p.level === "error" && p.key !== "sonos:auth") out.push(el("div", { class: "notice bad", text: p.text }));
+  }
+  if (S.away) out.push(el("div", { class: "notice", text: `Away until ${dayName(S.away.to, true)}. Repeating alarms are off until then.` }));
+  const lastError = S.log.find((l) => l.level === "error");
+  if (lastError && serverNow() - lastError.at < 24 * 3600 * 1000 && !S.session) {
+    out.push(el("div", { class: "notice bad", text: `${timeAt(lastError.at)} — ${lastError.text}` }));
+  }
+  return out;
+}
+
+function hero() {
+  const s = S.session;
+  if (s && s.phase === "ringing") {
+    const trouble = s.stage === 3 ? "No music would start, so the chime is sounding."
+      : s.stage === 2 ? `Playing the backup, ${s.playing}.`
+      : !s.confirmed ? `Starting ${s.playing}…`
+      : `Playing ${s.playing}${s.speakers.length > 1 ? ` on ${s.speakers.join(", ")}` : ""}`;
+    const level = s.volume != null && s.confirmed && s.stage < 3 ? ` · volume ${s.volume}${s.volume < s.targetVolume ? ` → ${s.targetVolume}` : ""}` : "";
+    return el("section", { class: "card hero ringing" },
+      el("div", { class: "eyebrow", text: s.test ? "Test ringing" : "Ringing now" }),
+      el("h2", { text: s.label }),
+      el("p", { class: "muted", text: trouble + level }),
+      el("div", { class: "actions" },
+        el("button", { class: "btn big", text: `Snooze ${S.config.snoozeMinutes} min`, onclick: (e) => act(e.currentTarget, () => press("/api/snooze")) }),
+        el("button", { class: "btn big primary", text: "Stop", onclick: (e) => act(e.currentTarget, () => press("/api/stop")) })),
+      s.stage < 3 && el("button", { class: "link", text: "I'm up — keep the music playing", onclick: (e) => act(e.currentTarget, () => press("/api/dismiss")) }),
+    );
+  }
+  if (s && s.phase === "snoozed") {
+    return el("section", { class: "card hero" },
+      el("div", { class: "eyebrow", text: "Snoozing" }),
+      el("h2", { text: `${s.label} rings again at ${timeAt(s.snoozeUntil)}` }),
+      el("p", { class: "muted", text: countdown(s.snoozeUntil) }),
+      el("div", { class: "actions one" },
+        el("button", { class: "btn big primary", text: "Stop the alarm", onclick: (e) => act(e.currentTarget, () => press("/api/stop")) })));
+  }
+  if (!S.sonos.connected) {
+    return el("section", { class: "card hero" },
+      el("div", { class: "eyebrow", text: "Step 1" }),
+      el("h2", { text: "Connect your Sonos" }),
+      el("p", { class: "muted", text: S.sonos.hasCredentials
+        ? "Sign in with your Sonos account so this app can start music and set the volume."
+        : "The Sonos key and secret haven't been added to the Worker yet. Add SONOS_CLIENT_ID and SONOS_CLIENT_SECRET, then reload this page." }),
+      S.sonos.hasCredentials && el("div", { class: "actions one" },
+        el("button", { class: "btn big primary", text: "Connect Sonos", onclick: () => (location.href = "/oauth/start") })));
+  }
+  const n = S.next;
+  if (!n) {
+    return el("section", { class: "card hero" },
+      el("div", { class: "eyebrow", text: "Next alarm" }),
+      el("h2", { text: S.alarms.length ? "Nothing is set to ring" : "No alarms yet" }),
+      el("p", { class: "muted", text: S.alarms.length ? "Switch an alarm on below." : "Add your first one below." }));
+  }
+  const a = S.alarms.find((x) => x.id === n.alarmId);
+  return el("section", { class: "card hero" },
+    el("div", { class: "eyebrow", text: "Next alarm" }),
+    clockNode("clock", hhmmAt(n.at)),
+    el("p", { class: "when", text: `${dayName(dateOf(n.at), true)} · ${countdown(n.at)}` }),
+    el("p", { class: "what muted", text: a ? `${a.label} · ${a.favoriteName}` : n.label }));
+}
+
+async function press(path) {
+  const data = await api("POST", path);
+  take(data);
+  if (data.confirmed === false) toast("The alarm is off, but Sonos didn't confirm the pause. Check that the music stopped.");
+}
+
+function alarmList() {
+  const sorted = [...S.alarms].sort((a, b) => a.time.localeCompare(b.time));
+  return [
+    el("div", { class: "section" }, el("h3", { text: "Alarms" })),
+    el("div", { class: "list" }, sorted.map((a) =>
+      el("div", { class: `card alarm${a.enabled ? "" : " off"}` },
+        el("button", { class: "open", "aria-label": `Edit ${a.label}, ${clockText(a.time)}`, onclick: () => openEditor(a) },
+          clockNode("time", a.time),
+          // An alarm named "Weekdays" that rings on weekdays need only say so once.
+          el("div", { class: "meta", text: [...new Set([a.label, daysText(a), speakersText(a)])].filter(Boolean).join(" · ") })),
+        el("label", { class: "switch" },
+          el("input", { type: "checkbox", checked: a.enabled, "aria-label": `${a.label} on`,
+            onchange: (e) => act(e.currentTarget, async () => take(await api("PUT", `/api/alarms/${a.id}`, { enabled: e.currentTarget.checked }))) }),
+          el("span")),
+        a.enabled && a.skipDate && el("div", { class: "skip" }, `Skipping ${dayName(a.skipDate)}.`,
+          el("button", { text: "Undo", onclick: (e) => act(e.currentTarget, async () => take(await api("POST", `/api/alarms/${a.id}/skip`, { skip: false }))) })),
+      ))),
+    el("button", { class: "btn add", text: "+ Add an alarm", onclick: () => openEditor(null) }),
+  ];
+}
+
+// ---------------------------------------------------------------- speakers
+
+function speakersPanel() {
+  const health = (V && V.health) || S.health;
+  const worries = health.problems.filter((p) => p.level !== "error");
+  const status = !V ? "Looking…"
+    : !V.reachable ? "Sonos isn't answering"
+    : `${worries.length || health.problems.length ? "" : "All well · "}checked ${health.checkedAt ? ago(health.checkedAt) : "just now"}`;
+  const head = el("div", { class: "section" },
+    el("h3", { text: "Speakers" }),
+    el("span", { class: "status" }, status, el("button", { text: "Refresh", onclick: (e) => act(e.currentTarget, refreshView) })));
+  if (!V) return [head];
+
+  const online = V.speakers.filter((sp) => sp.online);
+  const offline = V.speakers.filter((sp) => !sp.online);
+  const byId = Object.fromEntries(V.speakers.map((sp) => [sp.id, sp]));
+  const anyPlaying = V.groups.some((g) => g.state === "PLAYBACK_STATE_PLAYING" || g.state === "PLAYBACK_STATE_BUFFERING");
+
+  const groups = V.groups.map((g) => {
+    const members = g.playerIds.map((id) => byId[id]).filter(Boolean);
+    const playing = g.state === "PLAYBACK_STATE_PLAYING" || g.state === "PLAYBACK_STATE_BUFFERING";
+    const paused = g.state === "PLAYBACK_STATE_PAUSED";
+    const now = playing ? (g.playing || "Playing") : paused ? `Paused${g.playing ? ` · ${g.playing}` : ""}` : "Nothing playing";
+    // A speaker on its own needs its name only once: the heading is the way into its sheet.
+    const solo = members.length === 1;
+    const title = solo
+      ? el("h4", {}, el("button", { class: "who", text: members[0].name, onclick: () => openSpeaker(members[0].id) }))
+      : el("h4", { text: members.map((m) => m.name).join(" + ") || g.name });
+    return el("div", { class: "card grp" },
+      el("div", { class: "grp-top" },
+        el("div", {}, title, el("div", { class: `now${playing ? " live" : ""}`, text: now })),
+        playing && el("button", { class: "pill", text: "Pause", onclick: (e) => act(e.currentTarget, () => manage("pause", { groupId: g.id })) }),
+        paused && el("button", { class: "pill", text: "Play", onclick: (e) => act(e.currentTarget, () => manage("play", { groupId: g.id })) })),
+      members.map((m) => speakerRow(m, solo)));
+  });
+
+  const pills = el("div", { class: "pills" },
+    V.groups.length > 1 && el("button", { class: "pill", text: "Play everywhere", onclick: (e) => act(e.currentTarget, () => manage("group-all")) }),
+    V.groups.some((g) => g.playerIds.length > 1) && el("button", { class: "pill", text: "Separate all", onclick: (e) => act(e.currentTarget, () => manage("separate")) }),
+    anyPlaying && el("button", { class: "pill", text: "Pause all", onclick: (e) => act(e.currentTarget, () => manage("pause-all")) }));
+
+  return [
+    head,
+    worries.map((p) => el("div", { class: "notice", text: p.text })),
+    V.reachable && !online.length && el("div", { class: "notice", text: "Sonos reports no speakers online right now." }),
+    el("div", { class: "list" }, groups,
+      offline.length > 0 && el("div", { class: "card grp offline" },
+        el("div", { class: "grp-top" }, el("div", {}, el("h4", { text: "Offline" }))),
+        offline.map((sp) => el("div", { class: "spk" },
+          el("button", { class: "who", text: sp.name, onclick: () => openSpeaker(sp.id) }),
+          el("output", { text: sp.seenAt ? `last seen ${ago(sp.seenAt)}` : "" }))))),
+    pills,
+  ];
+}
+
+function speakerRow(sp, solo) {
+  const value = el("output", { text: sp.volume == null ? "" : String(sp.volume) });
+  const who = !solo && el("button", { class: "who", text: sp.name, "aria-label": `${sp.name}: more`, onclick: () => openSpeaker(sp.id) });
+  const cls = solo ? "spk solo" : "spk";
+  if (sp.fixed || sp.volume == null) {
+    return el("div", { class: cls }, who, el("span", { class: "fixed", text: sp.fixed ? "Fixed volume" : "Volume unknown" }));
+  }
+  const slider = el("input", { type: "range", min: 0, max: 100, value: sp.volume, "aria-label": `${sp.name} volume` });
+  slider.addEventListener("pointerdown", () => (dragging = true));
+  slider.addEventListener("input", () => { dragging = true; value.textContent = slider.value; });
+  slider.addEventListener("change", () => {
+    dragging = false;
+    act(null, () => manage("volume", { id: sp.id, volume: Number(slider.value) }));
+  });
+  // If the finger lifts without changing anything, no "change" arrives: let go anyway.
+  const letGo = () => setTimeout(() => (dragging = false), 400);
+  slider.addEventListener("pointerup", letGo);
+  slider.addEventListener("pointercancel", letGo);
+  slider.addEventListener("blur", letGo);
+  return el("div", { class: cls }, who, slider, value);
+}
+
+/** One speaker's own sheet: where it plays, and how loud alarms are on it. */
+function openSpeaker(id) {
+  const sp = V && V.speakers.find((x) => x.id === id);
+  if (!sp) return;
+  const mine = V.groups.find((g) => g.playerIds.includes(id));
+  const others = V.groups.filter((g) => g !== mine);
+  const nameOf = (g) => g.playerIds.map((p) => (V.speakers.find((x) => x.id === p) || {}).name).filter(Boolean).join(" + ");
+  const after = async (fn) => { await fn(); sheet.close(); };
+
+  const trimValue = el("span", { class: "value", text: `${sp.trim}%` });
+  const trim = el("input", { type: "range", min: 10, max: 100, step: 5, value: sp.trim, "aria-label": "Alarm level" });
+  trim.addEventListener("input", () => (trimValue.textContent = `${trim.value}%`));
+  trim.addEventListener("change", () => act(null, () => manage("trim", { id, trim: Number(trim.value) })));
+
+  openSheet(sp.name, "Done", null, [
+    sp.online && el("div", { class: "field" }, el("h3", { text: "Plays with" }),
+      el("p", { class: "muted", text: mine && mine.playerIds.length > 1 ? `Grouped as ${nameOf(mine)}.` : "On its own." }),
+      el("div", { class: "stack" },
+        mine && mine.playerIds.length > 1 && el("button", { class: "btn", text: "Play on its own", onclick: (e) => act(e.currentTarget, () => after(() => manage("split", { id }))) }),
+        others.map((g) => el("button", { class: "btn", text: `Join ${nameOf(g)}`, onclick: (e) => act(e.currentTarget, () => after(() => manage("join", { id, groupId: g.id }))) })))),
+    el("div", { class: "field" }, el("label", {}, "Alarm level", trimValue), trim,
+      el("div", { class: "hint", text: sp.fixed
+        ? "This speaker's volume is fixed, so alarms can't set it. In the Sonos app, set its Line-Out Level to Variable."
+        : "How loud alarms are here, compared with the alarm's own volume. Turn it down for a speaker that is louder than the rest." })),
+    el("div", { class: "field" }, el("p", { class: "muted", text: sp.alarms ? `${sp.alarms} alarm${sp.alarms === 1 ? " rings" : "s ring"} on this speaker.` : "No alarms ring on this speaker." })),
+    !sp.online && el("div", { class: "field" },
+      el("p", { class: "muted", text: `Offline${sp.seenAt ? ` — last seen ${ago(sp.seenAt)}` : ""}. Check its power and Wi-Fi; it will reappear here by itself.` }),
+      el("div", { class: "stack" }, el("button", { class: "btn danger", text: "Forget this speaker", onclick: (e) => act(e.currentTarget, async () => {
+        if (!confirm(`Forget ${sp.name}? Do this only if it has gone for good. Alarms will stop ringing on it.`)) return;
+        await after(() => manage("forget", { id }));
+      }) }))),
+  ]);
+}
+
+function activity() {
+  if (!S.log.length) return null;
+  return el("details", {},
+    el("summary", { text: "Recent activity" }),
+    el("ul", { class: "card log" }, S.log.slice(0, 15).map((l) =>
+      el("li", {},
+        el("time", { text: `${dayName(dateOf(l.at)).replace(/,.*/, "")} ${timeAt(l.at)}` }),
+        el("span", { class: l.level, text: l.text })))));
+}
+
+// ---------------------------------------------------------------- sign-in
+
+function renderLogin() {
+  clearTimeout(pollTimer);
+  const input = el("input", { type: "password", autocomplete: "current-password", placeholder: "Passphrase", "aria-label": "Passphrase" });
+  const button = el("button", { class: "btn primary big", type: "submit", text: "Sign in" });
+  app.replaceChildren(el("div", { class: "login" },
+    el("h2", { text: "House Alarm" }),
+    el("p", { class: "muted", text: "Enter the passphrase to continue." }),
+    el("form", { onsubmit: (e) => {
+      e.preventDefault();
+      act(button, async () => {
+        await api("POST", "/api/login", { password: input.value });
+        view = "loading";
+        lastJson = "";
+        await refresh();
+        refreshView();
+      });
+    } }, input, button)));
+  input.focus();
+}
+
+// ---------------------------------------------------------------- sheets
+
+function openSheet(title, doneLabel, onDone, body) {
+  const done = el("button", { text: doneLabel, onclick: (e) => (onDone ? act(e.currentTarget, onDone) : sheet.close()) });
+  sheet.replaceChildren(el("div", { class: "sheet" },
+    el("div", { class: "sheet-top" },
+      onDone ? el("button", { class: "muted", text: "Cancel", onclick: () => sheet.close() }) : el("span"),
+      el("h2", { text: title }),
+      done),
+    body));
+  if (!sheet.open) sheet.showModal();
+  sheet.scrollTop = 0;
+}
+sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); });
+sheet.addEventListener("close", () => { lastJson = ""; lastView = ""; refresh().then(refreshView); });
+
+async function loadChoices(force) {
+  if (!force && choices && Date.now() - choicesAt < 60000) return choices;
+  choices = await api("GET", "/api/favorites");
+  choicesAt = Date.now();
+  return choices;
+}
+
+function favoriteSelect(current, currentName, allowNone) {
+  const options = [];
+  if (allowNone) options.push(el("option", { value: "", text: "None" }));
+  else if (!current) options.push(el("option", { value: "", text: "Choose…", disabled: true, selected: true }));
+  const list = (choices && choices.favorites) || [];
+  if (current && !list.some((f) => f.id === current)) {
+    options.push(el("option", { value: current, text: `${currentName || "Saved favorite"} (no longer in Sonos Favorites)`, selected: true }));
+  }
+  for (const f of list) {
+    options.push(el("option", { value: f.id, text: f.service ? `${f.name} — ${f.service}` : f.name, selected: f.id === current }));
+  }
+  const select = el("select", {}, options);
+  select.dataset.names = JSON.stringify(Object.fromEntries(list.map((f) => [f.id, f.name])));
+  return select;
+}
+const favoriteName = (select, fallback) => JSON.parse(select.dataset.names || "{}")[select.value] || fallback || "";
+
+function openEditor(alarm) {
+  act(null, async () => {
+    await loadChoices();
+    const known = Object.values(S.config.speakers).sort((a, b) => a.name.localeCompare(b.name));
+    const draft = alarm ? { ...alarm, days: [...alarm.days] }
+      : { label: "", time: "07:00", days: [1, 2, 3, 4, 5], playerIds: known.map((sp) => sp.id), favoriteId: "", favoriteName: "", volume: 30, startVolume: 5, fadeMinutes: 5, shuffle: true };
+    const ringOn = known.map((sp) => el("input", { type: "checkbox", value: sp.id, checked: draft.playerIds.includes(sp.id) }));
+    const chosen = () => ringOn.filter((box) => box.checked).map((box) => box.value);
+
+    const time = el("input", { type: "time", class: "big-time", value: draft.time, "aria-label": "Time", required: true });
+    const label = el("input", { type: "text", value: draft.label, maxlength: 40, placeholder: "Weekdays, School run, …" });
+    const daysHint = el("div", { class: "hint" });
+    const dayButtons = DAY_LETTERS.map((letter, i) =>
+      el("button", { type: "button", text: letter, "aria-label": DAY_NAMES[i], "aria-pressed": String(draft.days.includes(i)), onclick: (e) => {
+        const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+        e.currentTarget.setAttribute("aria-pressed", String(on));
+        draft.days = on ? [...draft.days, i].sort() : draft.days.filter((d) => d !== i);
+        showDays();
+      } }));
+    const showDays = () => (daysHint.textContent = draft.days.length ? "Repeats on the days you've picked." : "No days picked: rings once, the next time it's that time, then switches itself off.");
+    showDays();
+
+    const plays = favoriteSelect(draft.favoriteId, draft.favoriteName, false);
+    const volumeValue = el("span", { class: "value" });
+    const volume = el("input", { type: "range", min: 1, max: 100, value: draft.volume, "aria-label": "Alarm volume" });
+    const fade = el("select", { "aria-label": "Fade-in" }, [0, 1, 2, 3, 5, 10, 15, 20, 30].map((m) =>
+      el("option", { value: m, text: m ? `Over ${m} minute${m === 1 ? "" : "s"}` : "Off — start at alarm volume", selected: m === draft.fadeMinutes })));
+    const startValue = el("span", { class: "value" });
+    const start = el("input", { type: "range", min: 0, max: 100, value: draft.startVolume, "aria-label": "Starting volume" });
+    const startField = el("div", { class: "field" }, el("label", {}, "Start the fade at", startValue), start);
+    const shuffle = el("input", { type: "checkbox", checked: draft.shuffle, "aria-label": "Shuffle" });
+    const sync = () => {
+      if (Number(start.value) > Number(volume.value)) start.value = volume.value;
+      volumeValue.textContent = volume.value;
+      startValue.textContent = start.value;
+      startField.hidden = fade.value === "0";
+    };
+    volume.addEventListener("input", sync);
+    start.addEventListener("input", sync);
+    fade.addEventListener("change", sync);
+    sync();
+
+    const save = async () => {
+      if (!plays.value) throw new Error("Pick what the alarm should play.");
+      if (!chosen().length) throw new Error("Pick at least one speaker to ring on.");
+      const body = {
+        time: time.value, label: label.value, days: draft.days, playerIds: chosen(),
+        favoriteId: plays.value, favoriteName: favoriteName(plays, draft.favoriteName),
+        volume: Number(volume.value), startVolume: Number(start.value), fadeMinutes: Number(fade.value), shuffle: shuffle.checked,
+      };
+      const data = alarm ? await api("PUT", `/api/alarms/${alarm.id}`, body) : await api("POST", "/api/alarms", { ...body, enabled: true });
+      sheet.close();
+      take(data);
+    };
+
+    const extras = alarm && el("div", { class: "stack" },
+      el("button", { class: "btn", type: "button", text: "Ring it now as a test", onclick: (e) => act(e.currentTarget, async () => {
+        const data = await api("POST", `/api/alarms/${alarm.id}/test`);
+        sheet.close();
+        take(data);
+      }) }),
+      alarm.enabled && alarm.nextAt && !alarm.skipDate && alarm.days.length > 0 &&
+        el("button", { class: "btn", type: "button", text: `Skip ${dayName(dateOf(alarm.nextAt))} only`, onclick: (e) => act(e.currentTarget, async () => {
+          const data = await api("POST", `/api/alarms/${alarm.id}/skip`, { skip: true });
+          sheet.close();
+          take(data);
+        }) }),
+      el("button", { class: "btn danger", type: "button", text: "Delete alarm", onclick: (e) => act(e.currentTarget, async () => {
+        if (!confirm(`Delete "${alarm.label}"?`)) return;
+        const data = await api("DELETE", `/api/alarms/${alarm.id}`);
+        sheet.close();
+        take(data);
+      }) }));
+
+    openSheet(alarm ? "Edit alarm" : "New alarm", "Save", save, [
+      el("div", { class: "field" }, time),
+      el("div", { class: "field" }, el("div", { class: "label", text: "Repeat" }), el("div", { class: "days" }, dayButtons), daysHint),
+      el("div", { class: "field" }, el("label", { text: "Name" }), label),
+      el("div", { class: "field" }, el("label", { text: "Play" }), plays,
+        el("div", { class: "hint", text: choices.favorites.length
+          ? "These are your Sonos Favorites. To wake to a Spotify playlist, add it to Favorites in the Sonos app."
+          : "No Sonos Favorites found. In the Sonos app, add a playlist or station to Favorites, then come back." })),
+      known.length > 1 && el("div", { class: "field" }, el("div", { class: "label", text: "Ring on" }),
+        el("div", { class: "checks" }, known.map((sp, i) => el("label", {}, ringOn[i], sp.online ? sp.name : `${sp.name} (offline)`))),
+        el("div", { class: "hint", text: "They're grouped for the alarm so they play in step, then put back the way they were when you stop it." })),
+      el("div", { class: "field" }, el("label", {}, "Alarm volume", volumeValue), volume,
+        known.some((sp) => sp.fixed && draft.playerIds.includes(sp.id)) && el("div", { class: "hint", text: "One of these speakers has a fixed volume, so volume and fade-in won't apply there. In the Sonos app, set its Line-Out Level to Variable to use them." })),
+      el("div", { class: "field" }, el("label", { text: "Fade in" }), fade),
+      startField,
+      el("div", { class: "field" }, el("label", { class: "check" }, "Shuffle", el("span", { class: "switch" }, shuffle, el("span")))),
+      extras,
+    ]);
+  });
+}
+
+function openSettings() {
+  act(null, async () => {
+    const connected = S.sonos.connected;
+    if (connected) await loadChoices(true).catch((e) => { choices = { favorites: [] }; toast(e.message); });
+    const c = S.config;
+    const saveConfig = async (patch) => {
+      take(await api("PUT", "/api/config", patch));
+      choicesAt = 0;
+    };
+
+    const sonos = [];
+    if (!connected) {
+      sonos.push(el("p", { class: "muted", text: "Not connected." }),
+        S.sonos.hasCredentials && el("div", { class: "stack" }, el("button", { class: "btn primary", text: "Connect Sonos", onclick: () => (location.href = "/oauth/start") })));
+    } else {
+      const found = Object.values(c.speakers);
+      const backup = favoriteSelect(c.backupFavoriteId, c.backupFavoriteName, true);
+      backup.addEventListener("change", () => act(backup, () => saveConfig({ backupFavoriteId: backup.value, backupFavoriteName: favoriteName(backup) })));
+      sonos.push(
+        el("p", { class: "muted", text: found.length
+          ? `Connected. ${found.length} speaker${found.length === 1 ? "" : "s"} found: ${found.map((sp) => sp.name).sort().join(", ")}.`
+          : "Connected, but no speakers have been found yet." }),
+        el("div", { class: "field" }, el("label", { text: "Backup if the music won't start" }), backup,
+          el("div", { class: "hint", text: "Pick something that isn't Spotify, like a radio station, so one outage can't silence both. If that fails too, the Sonos chime sounds." })),
+        el("div", { class: "stack" },
+          el("button", { class: "btn", text: "Reconnect Sonos", onclick: () => (location.href = "/oauth/start") }),
+          el("button", { class: "btn danger", text: "Disconnect Sonos", onclick: (e) => act(e.currentTarget, async () => {
+            if (!confirm("Disconnect Sonos? Alarms won't ring until you connect again.")) return;
+            take(await api("POST", "/api/sonos/disconnect"));
+            openSettings();
+          }) })));
+    }
+
+    const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+    if (!zones.includes(c.timezone)) zones.unshift(c.timezone);
+    const zone = el("select", { "aria-label": "Time zone" }, zones.map((z) => el("option", { value: z, text: z.replaceAll("_", " "), selected: z === c.timezone })));
+    zone.addEventListener("change", () => act(zone, () => saveConfig({ timezone: zone.value })));
+
+    const snooze = el("select", { "aria-label": "Snooze length" }, [5, 9, 10, 15, 20, 30].map((m) => el("option", { value: m, text: `${m} minutes`, selected: m === c.snoozeMinutes })));
+    snooze.addEventListener("change", () => act(snooze, () => saveConfig({ snoozeMinutes: Number(snooze.value) })));
+    const stops = [15, 30, 45, 60, 90, 120, 0];
+    if (!stops.includes(c.autoStopMinutes)) stops.unshift(c.autoStopMinutes);
+    const autoStop = el("select", { "aria-label": "Stop by itself" }, stops.map((m) => el("option", { value: m, text: m ? `After ${m} minutes` : "Never — keep playing", selected: m === c.autoStopMinutes })));
+    autoStop.addEventListener("change", () => act(autoStop, () => saveConfig({ autoStopMinutes: Number(autoStop.value) })));
+
+    const from = el("input", { type: "date", min: S.today, "aria-label": "First day away" });
+    const to = el("input", { type: "date", min: S.today, "aria-label": "Last day away" });
+    from.addEventListener("change", () => { to.min = from.value || S.today; if (!to.value || to.value < from.value) to.value = from.value; });
+    const away = [
+      c.vacations.map((v) => el("div", { class: "away" },
+        el("span", { text: v.from === v.to ? dayName(v.from) : `${dayName(v.from)} – ${dayName(v.to)}` }),
+        el("button", { text: "Remove", onclick: (e) => act(e.currentTarget, async () => {
+          await saveConfig({ vacations: c.vacations.filter((x) => x.id !== v.id) });
+          openSettings();
+        }) }))),
+      el("div", { class: "row" }, from, to),
+      el("div", { class: "stack" }, el("button", { class: "btn", text: "Add time away", onclick: (e) => act(e.currentTarget, async () => {
+        if (!from.value || !to.value) throw new Error("Pick a first and a last day.");
+        await saveConfig({ vacations: [...c.vacations, { from: from.value, to: to.value }] });
+        openSettings();
+      }) })),
+      el("div", { class: "hint", text: "Repeating alarms stay quiet on these days, first and last included. A one-time alarm still rings." }),
+    ];
+
+    const alertUrl = el("input", { type: "text", value: c.notifyUrl || "", placeholder: "https://ntfy.sh/your-private-topic", inputmode: "url", autocapitalize: "off", autocomplete: "off", spellcheck: "false", "aria-label": "Address for alerts" });
+    const alerts = [
+      alertUrl,
+      el("div", { class: "row stack" },
+        el("button", { class: "btn", text: "Save", onclick: (e) => act(e.currentTarget, async () => { await saveConfig({ notifyUrl: alertUrl.value }); toast(alertUrl.value ? "Alerts will go there." : "Alerts are off."); }) }),
+        el("button", { class: "btn", text: "Send a test", onclick: (e) => act(e.currentTarget, async () => {
+          await saveConfig({ notifyUrl: alertUrl.value });
+          await api("POST", "/api/alert-test");
+          toast("Sent. Check your phone.");
+        }) })),
+      el("div", { class: "hint", text: "Optional. If a speaker stays offline, Sonos signs this app out, or an alarm has to fall back to the chime, a short message is posted here. Works with a free ntfy.sh topic (install the ntfy app and subscribe to the same topic) or any webhook that accepts text." }),
+    ];
+
+    openSheet("Settings", "Done", null, [
+      el("div", { class: "field" }, el("h3", { text: "Sonos" }), sonos),
+      el("div", { class: "field" }, el("h3", { text: "Alerts" }), alerts),
+      el("div", { class: "field" }, el("h3", { text: "Snooze for" }), snooze),
+      el("div", { class: "field" }, el("h3", { text: "Stop by itself" }), autoStop),
+      el("div", { class: "field" }, el("h3", { text: "Time away" }), away),
+      el("div", { class: "field" }, el("h3", { text: "Time zone" }), zone),
+      el("div", { class: "stack" }, el("button", { class: "btn", text: "Sign out", onclick: (e) => act(e.currentTarget, async () => {
+        await api("POST", "/api/logout");
+        sheet.close();
+        S = null;
+        view = "login";
+        render();
+      }) })),
+    ]);
+  });
+}
+
+// ---------------------------------------------------------------- start
+
+(async () => {
+  const note = new URLSearchParams(location.search).get("sonos");
+  if (note) {
+    history.replaceState(null, "", "/");
+    toast(note === "connected" ? "Sonos is connected." : note);
+  }
+  await refresh();
+  refreshView();
+  // The server starts out on UTC; tell it where this house actually is.
+  if (S && !S.config.timezoneSet) {
+    const here = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (here) api("PUT", "/api/config", { timezone: here }).then(take, () => {});
+  }
+})();
+</script>
+</body>
+</html>
