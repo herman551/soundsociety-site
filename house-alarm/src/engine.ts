@@ -18,6 +18,7 @@ import {
   type Vacation,
 } from "./schedule";
 import { BUFFERING, PLAYING, SonosError, type Group, type Player, type SonosClient, type Store } from "./sonos";
+import { SettlingGroups } from "./settle";
 
 const SEC = 1000;
 const MIN = 60 * SEC;
@@ -256,7 +257,12 @@ function trimmed(base: number, trim: number): number {
 }
 
 export class Engine {
-  constructor(private d: Deps) {}
+  private d: Deps;
+
+  constructor(deps: Deps) {
+    // Sonos reports grouping changes late; see settle.ts.
+    this.d = { ...deps, sonos: new SettlingGroups(deps.sonos, deps.now) };
+  }
 
   // ------------------------------------------------------------ storage
 
@@ -1102,9 +1108,12 @@ export class Engine {
         const lead = groups.find((g) => g.playbackState === PLAYING) ?? groups.sort((a, b) => b.playerIds.length - a.playerIds.length)[0];
         if (lead && all.length > 1) await this.d.sonos.setGroupMembers(lead.id, [lead.coordinatorId, ...all.filter((p) => p !== lead.coordinatorId)]);
       } else if (action === "separate") {
-        // Each group shrinks to its coordinator; the rest end up on their own.
+        // Each speaker that shares a group moves into a new group of its own; the
+        // coordinator stays behind. Creating the groups, rather than shrinking the
+        // old one, means Sonos answers with every new group, so the panel can show
+        // them before Sonos's own list catches up.
         for (const g of await live()) {
-          if (g.playerIds.length > 1) await this.d.sonos.setGroupMembers(g.id, [g.coordinatorId]);
+          for (const p of g.playerIds) if (p !== g.coordinatorId) await this.d.sonos.createGroup(hid, [p]);
         }
       } else {
         throw new InputError("That is not something speakers can do.");

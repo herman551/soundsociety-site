@@ -13,6 +13,8 @@ export interface SonosSettings {
   /** Overridable so tests and local development can point at a stand-in. */
   apiBase: string;
   authBase: string;
+  /** Keep the latest Control API calls and Sonos's replies, for /api/debug/sonos. Never tokens. */
+  debug?: boolean;
 }
 
 export interface Tokens {
@@ -60,8 +62,11 @@ export interface SonosClient {
   favorites(householdId: string): Promise<Favorite[]>;
   /** Put exactly these players in a new group of their own. Returns it if Sonos says what it made. */
   createGroup(householdId: string, playerIds: string[]): Promise<Group | null>;
-  /** Make an existing group consist of exactly these players. The coordinator must be among them. */
-  setGroupMembers(groupId: string, playerIds: string[]): Promise<void>;
+  /**
+   * Make an existing group consist of exactly these players. The coordinator must be
+   * among them. Returns the group if Sonos says what it made; it keeps its id.
+   */
+  setGroupMembers(groupId: string, playerIds: string[]): Promise<Group | null>;
   /** A short description of what a group is playing, if Sonos knows. */
   nowPlaying(groupId: string): Promise<string | null>;
   loadFavorite(groupId: string, favoriteId: string, opts: { shuffle: boolean }): Promise<void>;
@@ -83,6 +88,8 @@ export class SonosError extends Error {
     this.name = "SonosError";
   }
 }
+
+type TokenResponse = { access_token: string; refresh_token?: string; expires_in: number };
 
 const TIMEOUT_MS = 10_000;
 const TOKEN_KEY = "tokens";
@@ -120,7 +127,22 @@ export class SonosAuth {
   }
 
   async exchangeCode(code: string, redirectUri: string): Promise<void> {
-    const t = await this.request({ grant_type: "authorization_code", code, redirect_uri: redirectUri });
+    let t: TokenResponse;
+    try {
+      t = await this.request({ grant_type: "authorization_code", code, redirect_uri: redirectUri });
+    } catch (e) {
+      // Sonos answers a bare "invalid_request" for a wrong Key or Secret, with no
+      // description. The Key has already passed Sonos's sign-in page by now, so
+      // the Secret is the likely culprit.
+      if (e instanceof SonosError && e.code === "invalid_request" && e.message.endsWith(": invalid_request")) {
+        throw new SonosError(
+          e.status,
+          e.code,
+          "Sonos turned down the integration's Secret. Check that SONOS_CLIENT_SECRET is the Secret from the Client Credentials card, then connect again.",
+        );
+      }
+      throw e;
+    }
     if (!t.refresh_token) throw new SonosError(502, "NO_REFRESH_TOKEN", "Sonos did not return a refresh token");
     await this.save(t.access_token, t.refresh_token, t.expires_in);
   }
@@ -162,9 +184,7 @@ export class SonosAuth {
     await this.store.put(TOKEN_KEY, tokens);
   }
 
-  private async request(
-    params: Record<string, string>,
-  ): Promise<{ access_token: string; refresh_token?: string; expires_in: number }> {
+  private async request(params: Record<string, string>): Promise<TokenResponse> {
     let res: Response;
     try {
       res = await fetch(`${this.settings.authBase}/login/v3/oauth/access`, {
@@ -190,11 +210,14 @@ export class SonosAuth {
       const reason = String(json.error_description ?? json.error ?? text.slice(0, 200) ?? "");
       throw new SonosError(res.ok ? 502 : res.status, String(json.error ?? `HTTP_${res.status}`), `Sonos sign-in failed: ${reason}`);
     }
-    return json as { access_token: string; refresh_token?: string; expires_in: number };
+    return json as TokenResponse;
   }
 }
 
 export class SonosApi implements SonosClient {
+  /** With `debug` on: the latest calls and what Sonos answered, oldest first. */
+  readonly recent: { at: number; call: string; body?: unknown; status: number; reply: string }[] = [];
+
   constructor(
     private settings: SonosSettings,
     private auth: SonosAuth,
@@ -222,6 +245,10 @@ export class SonosApi implements SonosClient {
         json = text ? JSON.parse(text) : {};
       } catch {
         /* leave empty */
+      }
+      if (this.settings.debug) {
+        this.recent.push({ at: Date.now(), call: `${method} ${path}`, body, status: res.status, reply: text.slice(0, 3000) });
+        if (this.recent.length > 40) this.recent.shift();
       }
       if (!res.ok) {
         const code = String(json.errorCode ?? `HTTP_${res.status}`);
@@ -255,7 +282,8 @@ export class SonosApi implements SonosClient {
   }
 
   async setGroupMembers(groupId: string, playerIds: string[]) {
-    await this.call("POST", `/groups/${encodeURIComponent(groupId)}/groups/setGroupMembers`, { playerIds });
+    const r = await this.call<{ group?: Group }>("POST", `/groups/${encodeURIComponent(groupId)}/groups/setGroupMembers`, { playerIds });
+    return r.group?.id ? r.group : null;
   }
 
   async nowPlaying(groupId: string) {

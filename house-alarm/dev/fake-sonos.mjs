@@ -15,6 +15,7 @@
 //   curl -X POST 127.0.0.1:8799/_set -d '{"fixed":["RINCON_1"]}'       # fixed-volume line-out
 //   curl -X POST 127.0.0.1:8799/_set -d '{"down":true}'                # Sonos's cloud stops answering
 //   curl -X POST 127.0.0.1:8799/_set -d '{"gone":["fav-kids"]}'        # a favorite is deleted
+//   curl -X POST 127.0.0.1:8799/_set -d '{"lagMs":11000}'              # group list lags, like the real one
 //   curl -X POST 127.0.0.1:8799/_reset
 //   curl 127.0.0.1:8799/_calls                                          # everything it was asked
 
@@ -45,11 +46,20 @@ function reset() {
     fixed: [],
     gone: [],
     down: false,
+    // The real group list showed a join 11 s after Sonos made it (2026-11-14).
+    // Off by default; set it to see how the app copes.
+    lagMs: 0,
+    stale: null,
     calls: [],
   };
 }
+/** Called before any grouping change: the list keeps the old arrangement for lagMs. */
+function regrouping() {
+  if (world.lagMs > 0 && !world.stale) world.stale = { groups: structuredClone(world.groups), until: Date.now() + world.lagMs };
+}
 function newGroup(playerIds) {
-  // Like the real thing, a group gets a new id whenever its membership changes.
+  // Like the real thing, a group keeps its id while its coordinator stays in it;
+  // a group that is created, or loses its coordinator, gets a new one.
   return { id: `${playerIds[0]}:${++seq}`, coordinatorId: playerIds[0], playerIds: [...playerIds], state: "PLAYBACK_STATE_IDLE", loaded: null };
 }
 function groupName(g) {
@@ -65,20 +75,23 @@ function detach(ids) {
     }
     const rest = g.playerIds.filter((id) => !ids.includes(id));
     if (!rest.length) continue;
-    // The remaining speakers carry on, with a new id and (if need be) a new coordinator.
-    const kept = newGroup(rest.includes(g.coordinatorId) ? [g.coordinatorId, ...rest.filter((id) => id !== g.coordinatorId)] : rest);
-    kept.state = rest.includes(g.coordinatorId) ? g.state : "PLAYBACK_STATE_IDLE";
-    kept.loaded = rest.includes(g.coordinatorId) ? g.loaded : null;
-    next.push(kept);
+    // The remaining speakers carry on: as the same group if the coordinator is
+    // among them, otherwise as a new, quiet one.
+    if (rest.includes(g.coordinatorId)) next.push({ ...g, playerIds: [g.coordinatorId, ...rest.filter((id) => id !== g.coordinatorId)] });
+    else next.push(newGroup(rest));
   }
   world.groups = next;
 }
 const online = (id) => !world.offline.includes(id);
-const visibleGroups = () =>
-  world.groups
+const visibleGroups = () => {
+  if (world.stale && Date.now() >= world.stale.until) world.stale = null;
+  // During the lag: the old membership, with what each group is doing now.
+  const groups = world.stale ? world.stale.groups.map((g) => ({ ...g, state: world.groups.find((x) => x.id === g.id)?.state ?? g.state })) : world.groups;
+  return groups
     .map((g) => ({ ...g, playerIds: g.playerIds.filter(online) }))
     .filter((g) => g.playerIds.length)
     .map((g) => ({ id: g.id, name: groupName(g), coordinatorId: g.playerIds.includes(g.coordinatorId) ? g.coordinatorId : g.playerIds[0], playbackState: g.state, playerIds: g.playerIds }));
+};
 reset();
 
 function send(res, status, body, headers = {}) {
@@ -108,7 +121,7 @@ createServer(async (req, res) => {
     const change = JSON.parse(raw || "{}");
     if (change.state) for (const g of world.groups) if (g.loaded) g.state = change.state;
     if (change.volume) Object.assign(world.volume, change.volume);
-    for (const key of ["silent", "offline", "fixed", "gone", "down"]) if (key in change) world[key] = change[key];
+    for (const key of ["silent", "offline", "fixed", "gone", "down", "lagMs"]) if (key in change) world[key] = change[key];
     return send(res, 200, { ok: true });
   }
   if (route === "POST /_reset") {
@@ -155,6 +168,7 @@ createServer(async (req, res) => {
   if (post && path.endsWith("/groups/createGroup")) {
     const ids = (body.playerIds || []).filter(online);
     if (!ids.length) return send(res, 400, { errorCode: "ERROR_INVALID_PARAMETER", reason: "no players" });
+    regrouping();
     detach(ids);
     const g = newGroup(ids);
     world.groups.push(g);
@@ -171,10 +185,9 @@ createServer(async (req, res) => {
       const ids = (body.playerIds || []).filter(online);
       if (!ids.includes(g.coordinatorId)) return send(res, 400, { errorCode: "ERROR_INVALID_PARAMETER", reason: "the coordinator must stay" });
       const dropped = g.playerIds.filter((id) => !ids.includes(id));
-      const { state, loaded } = g;
+      regrouping();
       detach([...ids, ...dropped]);
-      const made = newGroup([g.coordinatorId, ...ids.filter((id) => id !== g.coordinatorId)]);
-      Object.assign(made, { state, loaded });
+      const made = { ...g, playerIds: [g.coordinatorId, ...ids.filter((id) => id !== g.coordinatorId)] };
       world.groups.push(made, ...dropped.map((id) => newGroup([id])));
       say(`setGroupMembers [${made.playerIds.map(nameOf).join(", ")}]`);
       return send(res, 200, { group: { id: made.id, name: groupName(made), coordinatorId: made.coordinatorId, playerIds: made.playerIds } });

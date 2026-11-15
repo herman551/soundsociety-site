@@ -15,6 +15,8 @@ export interface Env {
   /** Only set for local development against a stand-in Sonos. */
   SONOS_API_BASE?: string;
   SONOS_AUTH_BASE?: string;
+  /** Set to anything to log Sonos's replies (see `wrangler tail`). */
+  SONOS_DEBUG?: string;
 }
 
 const MAX_TRIES = 8;
@@ -30,6 +32,7 @@ export function json(body: unknown, status = 200, headers: Record<string, string
 export class AlarmClock extends DurableObject<Env> {
   private engine: Engine;
   private auth: SonosAuth;
+  private sonos: SonosApi;
   /** Wrong-passphrase counts per caller. Kept in memory: losing them on a restart is harmless. */
   private misses = new Map<string, { count: number; until: number }>();
 
@@ -41,15 +44,17 @@ export class AlarmClock extends DurableObject<Env> {
       delete: async (key) => void (await ctx.storage.delete(key)),
     };
     const settings = {
-      clientId: env.SONOS_CLIENT_ID ?? "",
-      clientSecret: env.SONOS_CLIENT_SECRET ?? "",
+      // Trimmed: a space copied along with the value from Sonos's form breaks sign-in.
+      clientId: (env.SONOS_CLIENT_ID ?? "").trim(),
+      clientSecret: (env.SONOS_CLIENT_SECRET ?? "").trim(),
       apiBase: env.SONOS_API_BASE || "https://api.ws.sonos.com",
       authBase: env.SONOS_AUTH_BASE || "https://api.sonos.com",
+      debug: Boolean(env.SONOS_DEBUG),
     };
     this.auth = new SonosAuth(settings, store);
     this.engine = new Engine({
       store,
-      sonos: new SonosApi(settings, this.auth),
+      sonos: (this.sonos = new SonosApi(settings, this.auth)),
       now: () => Date.now(),
       setWake: (at) => ctx.storage.setAlarm(at),
       // Alerts go out as a plain-text POST: what ntfy and most webhooks accept.
@@ -96,6 +101,7 @@ export class AlarmClock extends DurableObject<Env> {
       if (route === "GET /oauth/callback") return this.oauthCallback(url);
 
       if (route === "GET /api/state") return this.state();
+      if (route === "GET /api/debug/sonos") return json({ debug: Boolean(this.env.SONOS_DEBUG), calls: this.sonos.recent });
       if (route === "GET /api/favorites") return json({ favorites: await this.engine.favorites() });
       if (route === "GET /api/speakers") return json(await this.engine.speakers());
       const manage = url.pathname.match(/^\/api\/speakers\/([a-z-]{1,20})$/);

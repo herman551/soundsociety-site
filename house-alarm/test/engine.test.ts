@@ -40,10 +40,21 @@ class FakeSonos implements SonosClient {
   down = false;
   signedOut = false;
   groupingBroken = false;
+  /**
+   * Like the real thing, `groups()` goes on reporting the old arrangement for this
+   * many reads after a grouping change. (Commands see the new one at once.)
+   */
+  lag = 0;
+  private stale: { house: FakeGroup[]; reads: number } | null = null;
 
   private make(ids: string[]): FakeGroup {
-    // Like the real thing, a group gets a new id whenever its membership changes.
+    // Like the real thing, a group keeps its id while its coordinator stays in it;
+    // a group that is created, or loses its coordinator, gets a new one.
     return { id: `G${++this.seq}`, coordinatorId: ids[0]!, playerIds: [...ids], state: IDLE, loaded: null };
+  }
+  /** Called before any grouping change, to start the lag. */
+  private regrouping() {
+    if (this.lag > 0 && !this.stale) this.stale = { house: structuredClone(this.house), reads: this.lag };
   }
   private check() {
     if (this.signedOut) throw new SonosError(401, "RECONNECT", "Sonos needs to be reconnected");
@@ -69,9 +80,7 @@ class FakeSonos implements SonosClient {
       const rest = g.playerIds.filter((p) => !ids.includes(p));
       if (!rest.length) continue;
       const keepsLead = rest.includes(g.coordinatorId);
-      const kept = this.make(keepsLead ? [g.coordinatorId, ...rest.filter((p) => p !== g.coordinatorId)] : rest);
-      if (keepsLead) Object.assign(kept, { state: g.state, loaded: g.loaded });
-      next.push(kept);
+      next.push(keepsLead ? { ...g, playerIds: [g.coordinatorId, ...rest.filter((p) => p !== g.coordinatorId)] } : this.make(rest));
     }
     this.house = next;
   }
@@ -98,7 +107,13 @@ class FakeSonos implements SonosClient {
   }
   async groups() {
     this.check();
-    const groups: Group[] = this.house
+    let house = this.house;
+    if (this.stale) {
+      // The old membership, with what each group is doing now.
+      house = this.stale.house.map((g) => ({ ...g, state: this.house.find((h) => h.id === g.id)?.state ?? g.state }));
+      if (--this.stale.reads <= 0) this.stale = null;
+    }
+    const groups: Group[] = house
       .map((g) => ({ ...g, playerIds: g.playerIds.filter((p) => !this.offline.has(p)) }))
       .filter((g) => g.playerIds.length)
       .map((g) => ({
@@ -121,6 +136,7 @@ class FakeSonos implements SonosClient {
     this.check();
     if (this.groupingBroken) throw new SonosError(500, "ERROR_COMMAND_FAILED", "could not group");
     const ids = playerIds.filter((p) => !this.offline.has(p));
+    this.regrouping();
     this.detach(ids);
     const g = this.make(ids);
     this.house.push(g);
@@ -131,12 +147,12 @@ class FakeSonos implements SonosClient {
     const g = this.group(groupId);
     if (!playerIds.includes(g.coordinatorId)) throw new SonosError(400, "ERROR_INVALID_PARAMETER", "the coordinator must stay");
     const dropped = g.playerIds.filter((p) => !playerIds.includes(p));
-    const { state, loaded, coordinatorId } = g;
+    this.regrouping();
     this.detach([...playerIds, ...dropped]);
-    const made = this.make([coordinatorId, ...playerIds.filter((p) => p !== coordinatorId)]);
-    Object.assign(made, { state, loaded });
+    const made: FakeGroup = { ...g, playerIds: [g.coordinatorId, ...playerIds.filter((p) => p !== g.coordinatorId)] };
     this.house.push(made, ...dropped.map((p) => this.make([p])));
     this.calls.push(`members[${this.names(made.playerIds)}]`);
+    return { id: made.id, name: this.names(made.playerIds), coordinatorId: made.coordinatorId, playerIds: made.playerIds };
   }
   async nowPlaying(groupId: string) {
     const g = this.group(groupId);
@@ -838,6 +854,38 @@ describe("the watcher", () => {
     expect((data.get("health") as Health).checkedAt).toBeNull();
   });
 });
+describe("when Sonos is slow to report grouping, as the real one is", () => {
+  // On a real system the group list showed a join 11 seconds after Sonos had
+  // made it. In these tests every read inside that window sees the old layout.
+  beforeEach(() => void (sonos.lag = 50));
+
+  it("puts the speakers back even when the alarm is stopped straight away", async () => {
+    await engine.createAlarm(EVERYWHERE);
+    await runTo(FRIDAY_0645);
+    expect(sonos.layout()).toEqual(["House+Kitchen+Office"]);
+    await engine.stop();
+    expect(sonos.layout()).toEqual(["House", "Kitchen", "Office"]);
+  });
+
+  it("groups the speakers once, and rings on all of them", async () => {
+    await engine.createAlarm(EVERYWHERE);
+    await runTo(FRIDAY_0645 + 6 * MIN);
+    expect(sonos.count("group")).toBe(1);
+    expect(sonos.calls.filter((c) => c.startsWith("load:"))).toEqual(["load:wake:shuffle[House,Kitchen,Office]@5,5,5"]);
+    expect(sonos.volume).toEqual({ P1: 30, P2: 30, P3: 30 });
+  });
+
+  it("shows a join in the Speakers panel at once, and can separate again straight after", async () => {
+    const joined = (await engine.manage("join", { id: "P3", groupId: sonos.groupOf("P1").id })) as any;
+    expect(joined.groups.map((g: any) => g.playerIds.length).sort()).toEqual([1, 2]);
+    expect(joined.speakers.find((sp: any) => sp.name === "Office").groupId).toBe(sonos.groupOf("P1").id);
+
+    const separated = (await engine.manage("separate", {})) as any;
+    expect(sonos.layout()).toEqual(["House", "Kitchen", "Office"]);
+    expect(separated.groups).toHaveLength(3);
+  });
+});
+
 const DAY = () => 24 * HOUR;
 
 describe("managing speakers", () => {
