@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local development (`npm run dev`). Never commit .dev.vars.
+APP_PASSWORD=choose-a-long-passphrase
+SONOS_CLIENT_ID=your-sonos-integration-key
+SONOS_CLIENT_SECRET=your-sonos-integration-secret
