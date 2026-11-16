@@ -15,7 +15,7 @@ export interface Env {
   /** Only set for local development against a stand-in Sonos. */
   SONOS_API_BASE?: string;
   SONOS_AUTH_BASE?: string;
-  /** Set to anything to log Sonos's replies (see `wrangler tail`). */
+  /** Set to anything to keep Sonos's latest replies for /api/debug/sonos. */
   SONOS_DEBUG?: string;
 }
 
@@ -96,6 +96,11 @@ export class AlarmClock extends DurableObject<Env> {
 
     try {
       if (route === "POST /internal/login") return this.login(await body());
+      if (route === "POST /internal/doorbell") {
+        const b = await body();
+        const r = await this.engine.doorbell(String(b.token ?? ""), String(b.method ?? ""), String(b.origin ?? ""));
+        return new Response(r.text, { status: r.status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+      }
 
       if (route === "GET /oauth/start") return this.oauthStart(url);
       if (route === "GET /oauth/callback") return this.oauthCallback(url);
@@ -106,6 +111,7 @@ export class AlarmClock extends DurableObject<Env> {
       if (route === "GET /api/speakers") return json(await this.engine.speakers());
       const manage = url.pathname.match(/^\/api\/speakers\/([a-z-]{1,20})$/);
       if (manage && request.method === "POST") return json(await this.engine.manage(manage[1]!, await body()));
+      if (route === "POST /api/doorbell/test") return this.state({ rang: await this.engine.testDoorbell(url.origin) });
       if (route === "POST /api/alert-test") {
         await this.engine.testAlert();
         return json({ ok: true });

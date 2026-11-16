@@ -3,6 +3,8 @@
 
 import { clearedCookie, sessionCookie, signedIn } from "./auth";
 import { json, type Env } from "./clock";
+import { dingDong } from "./dingdong";
+import { DINGDONG_PATH } from "./doorbell";
 import { APPLE_TOUCH_ICON_PNG, ICON_SVG } from "./icons";
 import page from "./ui.html";
 
@@ -65,6 +67,20 @@ export default {
         const bytes = Uint8Array.from(atob(APPLE_TOUCH_ICON_PNG), (c) => c.charCodeAt(0));
         return new Response(bytes, { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } });
       }
+      // Fetched by the speakers themselves when the doorbell rings.
+      if (path === DINGDONG_PATH) {
+        return new Response(dingDong(), { headers: { "Content-Type": "audio/wav", "Cache-Control": "public, max-age=86400" } });
+      }
+    }
+
+    // The doorbell's own address. The secret in it is the only check: a doorbell cannot sign in.
+    const bell = path.match(/^\/doorbell\/([\w-]{16,128})$/);
+    if (bell) {
+      const clock = env.CLOCK.get(env.CLOCK.idFromName("house"));
+      return clock.fetch("https://clock/internal/doorbell", {
+        method: "POST",
+        body: JSON.stringify({ token: bell[1], method: request.method, origin: url.origin }),
+      });
     }
 
     const isApi = path.startsWith("/api/");

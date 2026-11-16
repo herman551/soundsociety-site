@@ -39,6 +39,7 @@ main {
 }
 h1, h2, h3, p { margin: 0; }
 button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
 button { cursor: pointer; }
 .muted { color: var(--muted); }
 .small { font-size: 14px; }
@@ -186,6 +187,7 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .check { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
 .check .switch { width: 52px; height: 36px; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field > label.gap { margin-top: 16px; }
 .stack { display: grid; gap: 10px; margin-top: 18px; }
 .away { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
 .away button { border: 0; background: none; color: var(--bad-ink); font-weight: 600; padding: 8px 0 8px 12px; }
@@ -884,8 +886,14 @@ function openSettings() {
       el("div", { class: "hint", text: "Optional. If a speaker stays offline, Sonos signs this app out, or an alarm has to fall back to the chime, a short message is posted here. Works with a free ntfy.sh topic (install the ntfy app and subscribe to the same topic) or any webhook that accepts text." }),
     ];
 
+    const doorbell = connected && [
+      el("p", { class: "muted", text: doorbellText(c.doorbell) }),
+      el("div", { class: "stack" }, el("button", { class: "btn", text: c.doorbell.enabled ? "Doorbell settings" : "Set up the doorbell", onclick: () => openDoorbell() })),
+    ];
+
     openSheet("Settings", "Done", null, [
       el("div", { class: "field" }, el("h3", { text: "Sonos" }), sonos),
+      doorbell && el("div", { class: "field" }, el("h3", { text: "Doorbell" }), doorbell),
       el("div", { class: "field" }, el("h3", { text: "Alerts" }), alerts),
       el("div", { class: "field" }, el("h3", { text: "Snooze for" }), snooze),
       el("div", { class: "field" }, el("h3", { text: "Stop by itself" }), autoStop),
@@ -900,6 +908,126 @@ function openSettings() {
       }) })),
     ]);
   });
+}
+
+// ---------------------------------------------------------------- doorbell
+
+function doorbellText(d) {
+  if (!d.enabled) return "Off. It can ring your speakers when someone rings a UniFi Protect doorbell.";
+  const names = d.playerIds.map((id) => (S.config.speakers[id] || {}).name).filter(Boolean);
+  const quiet = d.quietFrom && d.quietTo
+    ? ` From ${clockText(d.quietFrom)} to ${clockText(d.quietTo)} ${d.quietVolume ? `it rings at ${d.quietVolume}` : "it stays silent"}.`
+    : "";
+  return `On. Rings ${names.join(", ") || "no speakers"} at ${d.volume}.${quiet}`;
+}
+
+/** The doorbell's own sheet. Each control saves as soon as it changes, like Settings. */
+function openDoorbell(scrollTo) {
+  const d = S.config.doorbell;
+  const known = Object.values(S.config.speakers).sort((a, b) => a.name.localeCompare(b.name));
+  const save = async (patch) => take(await api("PUT", "/api/config", { doorbell: patch }));
+  // Changes that add or remove parts of the sheet draw it again, where it was scrolled to.
+  const redraw = () => openDoorbell(sheet.scrollTop);
+  const saveAndRedraw = (control, patch) => act(control, async () => {
+    try { await save(patch); } finally { redraw(); }
+  });
+
+  const on = el("input", { type: "checkbox", checked: d.enabled, "aria-label": "Doorbell on" });
+  on.addEventListener("change", () => saveAndRedraw(on, { enabled: on.checked }));
+
+  const address = d.token ? `${location.origin}/doorbell/${d.token}` : "";
+  const addressBox = el("input", { type: "text", value: address, readonly: true, "aria-label": "Doorbell address", autocomplete: "off", spellcheck: "false" });
+  addressBox.addEventListener("focus", () => addressBox.select());
+  const addressField = d.token && el("div", { class: "field" },
+    el("h3", { text: "Address for UniFi Protect" }),
+    addressBox,
+    el("div", { class: "row stack" },
+      el("button", { class: "btn", text: "Copy", onclick: (e) => act(e.currentTarget, async () => {
+        await navigator.clipboard.writeText(address);
+        toast("Copied. Paste it into Protect.");
+      }) }),
+      el("button", { class: "btn", text: "Make a new address", onclick: (e) => {
+        if (!confirm("Make a new address? The old one stops working, so Protect will need the new one.")) return;
+        saveAndRedraw(e.currentTarget, { newAddress: true });
+      } })),
+    el("div", { class: "hint", text: "In UniFi Protect, open Alarm Manager and create an alarm. Activity: Ring. Scope: your doorbell. Action: Webhook, with method POST, and paste this address. Keep it private: anyone who has it can ring your speakers. If it gets out, make a new one and paste that into Protect." }));
+
+  const ringOn = known.map((sp) => el("input", { type: "checkbox", value: sp.id, checked: d.playerIds.includes(sp.id), disabled: !sp.canChime }));
+  ringOn.forEach((box) => box.addEventListener("change", () => act(null, async () => {
+    try {
+      await save({ playerIds: ringOn.filter((b) => b.checked).map((b) => b.value) });
+    } catch (e) {
+      box.checked = !box.checked;
+      throw e;
+    }
+  })));
+
+  const sound = el("select", { "aria-label": "Sound" },
+    el("option", { value: "dingdong", text: "Ding-dong", selected: d.sound === "dingdong" }),
+    el("option", { value: "chime", text: "The Sonos chime", selected: d.sound === "chime" }),
+    el("option", { value: "url", text: "A sound from a web address", selected: d.sound === "url" }));
+  const soundUrl = el("input", { type: "text", value: d.soundUrl || "", placeholder: "https://example.com/doorbell.mp3", inputmode: "url", autocapitalize: "off", autocomplete: "off", spellcheck: "false", "aria-label": "Address of the sound" });
+  const urlField = el("div", { class: "stack" }, soundUrl,
+    el("div", { class: "hint", text: "An MP3 or WAV file on the web. The speakers fetch it themselves." }));
+  const showUrl = () => (urlField.hidden = sound.value !== "url");
+  showUrl();
+  sound.addEventListener("change", () => {
+    showUrl();
+    // A sound from the web waits for its address.
+    if (sound.value === "url" && !soundUrl.value.trim()) return soundUrl.focus();
+    act(sound, () => save(sound.value === "url" ? { sound: "url", soundUrl: soundUrl.value } : { sound: sound.value }));
+  });
+  soundUrl.addEventListener("change", () => act(soundUrl, () => save({ sound: "url", soundUrl: soundUrl.value })));
+
+  const slider = (value, min, label, key) => {
+    const shown = el("span", { class: "value", text: value ? String(value) : "Silent" });
+    const input = el("input", { type: "range", min, max: 100, value, "aria-label": label });
+    input.addEventListener("input", () => (shown.textContent = Number(input.value) ? input.value : "Silent"));
+    input.addEventListener("change", () => act(null, () => save({ [key]: Number(input.value) })));
+    return { shown, input };
+  };
+  const volume = slider(d.volume, 1, "Doorbell volume", "volume");
+  const quietVolume = slider(d.quietVolume, 0, "Volume in quiet hours", "quietVolume");
+
+  const quietOn = el("input", { type: "checkbox", checked: Boolean(d.quietFrom), "aria-label": "Quiet hours" });
+  quietOn.addEventListener("change", () => saveAndRedraw(quietOn, quietOn.checked ? { quietFrom: "22:00", quietTo: "07:00" } : { quietFrom: null, quietTo: null }));
+  const quietFrom = el("input", { type: "time", value: d.quietFrom || "22:00", "aria-label": "Quiet hours start" });
+  const quietTo = el("input", { type: "time", value: d.quietTo || "07:00", "aria-label": "Quiet hours end" });
+  for (const box of [quietFrom, quietTo]) box.addEventListener("change", () => act(box, () => save({ quietFrom: quietFrom.value, quietTo: quietTo.value })));
+
+  const rings = (S.rings || []).slice(0, 8);
+
+  openSheet("Doorbell", "Done", null, [
+    el("div", { class: "field" }, el("label", { class: "check" }, "Ring the speakers when someone rings the doorbell", el("span", { class: "switch" }, on, el("span")))),
+    addressField,
+    d.enabled && [
+      el("div", { class: "field" }, el("div", { class: "label", text: "Ring on" }),
+        el("div", { class: "checks" }, known.map((sp, i) => el("label", {}, ringOn[i],
+          !sp.canChime ? `${sp.name} (can't play doorbell sounds)` : sp.online ? sp.name : `${sp.name} (offline)`))),
+        el("div", { class: "hint", text: "The sound plays over whatever is on. The music dips for it, then carries on." })),
+      el("div", { class: "field" }, el("label", { text: "Sound" }), sound, urlField),
+      el("div", { class: "field" }, el("label", {}, "Volume", volume.shown), volume.input,
+        el("div", { class: "hint", text: "Each speaker's alarm level applies here too. Sonos keeps alert sounds between a floor and a ceiling of its own, so the very lowest and highest settings may sound the same." })),
+      el("div", { class: "field" }, el("label", { class: "check" }, "Quiet hours", el("span", { class: "switch" }, quietOn, el("span"))),
+        d.quietFrom && [
+          el("div", { class: "row" }, quietFrom, quietTo),
+          el("label", { class: "gap" }, "Volume in quiet hours", quietVolume.shown), quietVolume.input,
+          el("div", { class: "hint", text: "All the way down keeps the speakers silent during these hours." }),
+        ]),
+      el("div", { class: "stack" }, el("button", { class: "btn", text: "Ring the speakers now", onclick: (e) => act(e.currentTarget, async () => {
+        const data = await api("POST", "/api/doorbell/test");
+        take(data);
+        toast(data.rang);
+        redraw();
+      }) })),
+    ],
+    rings.length > 0 && el("div", { class: "field" }, el("h3", { text: "Recent rings" }),
+      el("ul", { class: "card log" }, rings.map((r) =>
+        el("li", {},
+          el("time", { text: `${dayName(dateOf(r.at)).replace(/,.*/, "")} ${timeAt(r.at)}` }),
+          el("span", { class: r.level, text: r.text }))))),
+  ]);
+  if (scrollTo) sheet.scrollTop = scrollTo;
 }
 
 // ---------------------------------------------------------------- start

@@ -19,6 +19,19 @@ import {
 } from "./schedule";
 import { BUFFERING, PLAYING, SonosError, type Group, type Player, type SonosClient, type Store } from "./sonos";
 import { SettlingGroups } from "./settle";
+import { sameSecret } from "./auth";
+import {
+  DEFAULT_DOORBELL,
+  DINGDONG_PATH,
+  DOORBELL_SOUNDS,
+  RING_GAP_MS,
+  RING_LIMIT,
+  inQuietHours,
+  newToken,
+  type DoorbellSettings,
+  type DoorbellSound,
+  type Ring,
+} from "./doorbell";
 
 const SEC = 1000;
 const MIN = 60 * SEC;
@@ -74,6 +87,7 @@ export interface Config {
   vacations: Vacation[];
   /** Where to send alerts: an ntfy topic or any webhook that accepts a text POST. */
   notifyUrl: string | null;
+  doorbell: DoorbellSettings;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -87,6 +101,7 @@ export const DEFAULT_CONFIG: Config = {
   backupFavoriteName: null,
   vacations: [],
   notifyUrl: null,
+  doorbell: DEFAULT_DOORBELL,
 };
 
 export interface Alarm {
@@ -195,6 +210,8 @@ interface State {
   log: LogEntry[];
   health: Health;
   watchAt: number;
+  /** The doorbell's latest rings, newest first. */
+  rings: Ring[];
   /** Alerts to send once the state is safely saved. */
   outbox: string[];
 }
@@ -267,22 +284,25 @@ export class Engine {
   // ------------------------------------------------------------ storage
 
   private async load(): Promise<State> {
-    const [config, alarms, session, log, health, watchAt] = await Promise.all([
+    const [config, alarms, session, log, health, watchAt, rings] = await Promise.all([
       this.d.store.get<Partial<Config>>("config"),
       this.d.store.get<Alarm[]>("alarms"),
       this.d.store.get<Session>("session"),
       this.d.store.get<LogEntry[]>("log"),
       this.d.store.get<Health>("health"),
       this.d.store.get<number>("watchAt"),
+      this.d.store.get<Ring[]>("rings"),
     ]);
+    const defaults = structuredClone(DEFAULT_CONFIG);
     return {
       // A fresh copy of the defaults each time: the speaker list is edited in place.
-      config: { ...structuredClone(DEFAULT_CONFIG), ...config },
+      config: { ...defaults, ...config, doorbell: { ...defaults.doorbell, ...config?.doorbell } },
       alarms: alarms ?? [],
       session: session ?? null,
       log: log ?? [],
       health: health ?? { checkedAt: null, problems: [] },
       watchAt: watchAt ?? 0,
+      rings: rings ?? [],
       outbox: [],
     };
   }
@@ -295,6 +315,7 @@ export class Engine {
       this.d.store.put("log", st.log),
       this.d.store.put("health", st.health),
       this.d.store.put("watchAt", st.watchAt),
+      this.d.store.put("rings", st.rings),
     ]);
   }
 
@@ -967,6 +988,16 @@ export class Engine {
       }
     }
 
+    const bell = c.doorbell;
+    if (bell.enabled && !bell.playerIds.some((id) => c.speakers[id]?.online && c.speakers[id]?.canChime)) {
+      found.push({
+        key: "doorbell:silent",
+        level: "error",
+        text: "The doorbell has no speaker online that can play it.",
+        cleared: "The doorbell has a speaker to play on again.",
+      });
+    }
+
     // --- volume: a fixed line-out cannot fade in
     if (thorough) {
       await Promise.all(
@@ -1087,6 +1118,7 @@ export class Engine {
         if (speaker().online) throw new InputError("That speaker is online. Only speakers that have gone for good can be forgotten.");
         delete c.speakers[id];
         for (const a of st.alarms) a.playerIds = a.playerIds.filter((p) => p !== id);
+        c.doorbell.playerIds = c.doorbell.playerIds.filter((p) => p !== id);
       } else if (action === "pause") {
         await this.d.sonos.pause(groupId);
       } else if (action === "play") {
@@ -1251,7 +1283,51 @@ export class Engine {
           };
         });
       }
+      if (input.doorbell !== undefined) {
+        if (!input.doorbell || typeof input.doorbell !== "object") throw new InputError("Those doorbell settings were not understood.");
+        c.doorbell = this.readDoorbell(input.doorbell as Record<string, unknown>, c);
+        st.watchAt = 0;
+      }
     });
+  }
+
+  private readDoorbell(input: Record<string, unknown>, c: Config): DoorbellSettings {
+    const d = { ...c.doorbell };
+    if (input.enabled !== undefined) d.enabled = input.enabled === true;
+    if (input.playerIds !== undefined) {
+      if (!Array.isArray(input.playerIds)) throw new InputError("Pick the speakers the doorbell rings on.");
+      d.playerIds = [...new Set(input.playerIds)].filter((p): p is string => typeof p === "string" && Boolean(c.speakers[p]));
+    } else if (input.enabled === true && !c.doorbell.enabled && !d.playerIds.length) {
+      // Switched on for the first time: every speaker that can play it.
+      d.playerIds = Object.values(c.speakers).filter((sp) => sp.canChime).map((sp) => sp.id);
+    }
+    if (input.volume !== undefined) d.volume = clampInt(input.volume, 1, 100, d.volume);
+    if (input.quietVolume !== undefined) d.quietVolume = clampInt(input.quietVolume, 0, 100, d.quietVolume);
+    if (input.sound !== undefined) {
+      if (!DOORBELL_SOUNDS.includes(input.sound as DoorbellSound)) throw new InputError("That is not a doorbell sound.");
+      d.sound = input.sound as DoorbellSound;
+    }
+    if (input.soundUrl !== undefined) {
+      const url = text(input.soundUrl, 500);
+      if (url && !/^https:\/\/[^\s/]+\.[^\s/]+\/\S+$/.test(url)) throw new InputError("The sound needs an https:// address of an MP3 or WAV file.");
+      d.soundUrl = url || null;
+    }
+    if (d.sound === "url" && !d.soundUrl) throw new InputError("Enter the address of the sound, or pick another sound.");
+    if (input.quietFrom !== undefined || input.quietTo !== undefined) {
+      const from = input.quietFrom === undefined ? d.quietFrom : input.quietFrom;
+      const to = input.quietTo === undefined ? d.quietTo : input.quietTo;
+      if (from === null && to === null) {
+        d.quietFrom = d.quietTo = null;
+      } else {
+        if (!isClockTime(from) || !isClockTime(to)) throw new InputError("Pick when quiet hours start and end.");
+        if (from === to) throw new InputError("Quiet hours need to start and end at different times.");
+        d.quietFrom = from;
+        d.quietTo = to;
+      }
+    }
+    if (input.newAddress === true || (d.enabled && !d.token)) d.token = newToken();
+    if (d.enabled && !d.playerIds.length) throw new InputError("Pick at least one speaker for the doorbell.");
+    return d;
   }
 
   /** After a successful Sonos sign-in: adopt the household and discover its speakers. */
@@ -1279,6 +1355,105 @@ export class Engine {
       st.health = { checkedAt: null, problems: [] };
       for (const sp of Object.values(st.config.speakers)) sp.online = false;
       this.note(st, "info", "Sonos disconnected.");
+    });
+  }
+
+  // ------------------------------------------------------------ the doorbell
+
+  /** When the doorbell last made the speakers ring. In memory: losing it on a restart is harmless. */
+  private rangAt = -Infinity;
+
+  /**
+   * Someone called the doorbell's address. Its secret is the only check, since a
+   * doorbell cannot sign in. Answers the caller in a sentence.
+   *
+   * The ring itself skips the queue every other change waits in: a visitor
+   * should not wait behind the watcher's questions to Sonos. It only reads the
+   * settings, and its result is written down afterwards like any other change.
+   */
+  async doorbell(token: string, method: string, origin: string): Promise<{ status: number; text: string }> {
+    const c = (await this.load()).config;
+    const d = c.doorbell;
+    if (!d.token || !(await sameSecret(token, d.token))) return { status: 404, text: "Not found." };
+    const now = this.d.now();
+    if (method !== "POST") {
+      // Never ring for a GET: link previews and browsers fetch addresses they are shown.
+      await this.record({ at: now, level: "warn", text: `Something opened the doorbell's address without ringing it (a ${method}). If that was Protect, set its webhook to POST.` });
+      return { status: 405, text: "This address rings the doorbell with a POST." };
+    }
+    if (!d.enabled) {
+      await this.record({ at: now, level: "info", text: "The doorbell rang, but it is switched off here." });
+      return { status: 200, text: "The doorbell is switched off in House Alarm." };
+    }
+    if (now - this.rangAt < RING_GAP_MS) return { status: 200, text: "Already ringing." };
+    this.rangAt = now;
+    const ring = await this.ring(c, origin, now, "Doorbell");
+    await this.record(ring, ring.level === "error");
+    return { status: 200, text: ring.text };
+  }
+
+  /** Ring the speakers from the page, just as the doorbell would ring them right now. */
+  async testDoorbell(origin: string): Promise<string> {
+    const c = (await this.load()).config;
+    if (!c.doorbell.playerIds.length) throw new InputError("Pick at least one speaker for the doorbell first.");
+    const now = this.d.now();
+    if (now - this.rangAt < RING_GAP_MS) return "Already ringing.";
+    this.rangAt = now;
+    const ring = await this.ring(c, origin, now, "Test ring");
+    await this.record(ring);
+    return ring.text;
+  }
+
+  private async ring(c: Config, origin: string, now: number, what: string): Promise<Ring> {
+    const d = c.doorbell;
+    const quiet = inQuietHours(d, now, c.timezone);
+    const volume = quiet ? d.quietVolume : d.volume;
+    if (volume <= 0) return { at: now, level: "info", text: `${what}: quiet hours, so the speakers stayed silent.` };
+
+    const known = d.playerIds.map((id) => c.speakers[id]).filter((sp): sp is Speaker => Boolean(sp));
+    const able = known.filter((sp) => sp.canChime);
+    const url = d.sound === "dingdong" ? origin + DINGDONG_PATH : d.sound === "url" ? (d.soundUrl ?? undefined) : undefined;
+    type Result = { sp: Speaker; ok: boolean; why?: string; fellBack?: string };
+    const results = await Promise.all(
+      able.map(async (sp): Promise<Result> => {
+        const level = trimmed(volume, sp.trim);
+        try {
+          await this.d.sonos.chime(sp.id, level, url);
+          return { sp, ok: true };
+        } catch (e) {
+          if (!url) return { sp, ok: false, why: why(e) };
+          // Sonos would not take the sound: its own chime is better than nothing.
+          return this.d.sonos.chime(sp.id, level).then(
+            () => ({ sp, ok: true, fellBack: why(e) }),
+            () => ({ sp, ok: false, why: why(e) }),
+          );
+        }
+      }),
+    );
+
+    const rang = results.filter((r) => r.ok).map((r) => r.sp.name);
+    const failed = results.filter((r) => !r.ok);
+    const fellBack = results.find((r) => r.fellBack)?.fellBack;
+    const cannot = known.filter((sp) => !sp.canChime).map((sp) => sp.name);
+    const parts = [
+      rang.length
+        ? `${what}: rang on ${list(rang)} at ${volume}${quiet ? " (quiet hours)" : ""}.`
+        : `${what}: no speaker played it.`,
+      fellBack && `Sonos would not play the doorbell sound (${fellBack}), so it played its own chime instead.`,
+      ...failed.map((r) => `${r.sp.name} did not: ${r.why}.`),
+      cannot.length && `${list(cannot)} cannot play doorbell sounds.`,
+      !known.length && "Pick the speakers it rings on in Settings.",
+    ];
+    const level = !rang.length ? "error" : failed.length || cannot.length || fellBack ? "warn" : "info";
+    return { at: now, level, text: parts.filter(Boolean).join(" ") };
+  }
+
+  /** Write a ring into the doorbell's history, and trouble into the activity log too. */
+  private async record(ring: Ring, alert = false): Promise<void> {
+    await this.change(async (st) => {
+      st.rings.unshift(ring);
+      if (st.rings.length > RING_LIMIT) st.rings.length = RING_LIMIT;
+      if (ring.level !== "info") this.note(st, ring.level, ring.text, alert);
     });
   }
 
@@ -1319,6 +1494,7 @@ export class Engine {
       },
       health: st.health,
       log: st.log,
+      rings: st.rings,
     };
   }
 

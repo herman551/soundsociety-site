@@ -21,6 +21,8 @@ API, so there is nothing to keep switched on at home.
   favorite, then the Sonos chime on repeat.
 - **Speakers**: every speaker in the household is found automatically. See what
   each is playing, set volumes, group and separate them, pause everything.
+- **A doorbell**: when someone rings a UniFi Protect doorbell, the speakers
+  you choose play a ding-dong over whatever is on, with quiet hours.
 - **A watcher** that looks over the system every 15 minutes, and 10 minutes
   before each alarm. It notices a speaker going offline, Sonos signing the app
   out, an alarm's playlist being removed from Favorites, and a fixed-volume
@@ -98,6 +100,18 @@ In Settings → Alerts, enter an address to post to. The simplest is a topic on
 `https://ntfy.sh/<that-topic>`, install the ntfy app and subscribe to the same
 topic. Any webhook that accepts a plain-text POST works too.
 
+### 6. Doorbell (optional)
+
+In Settings → Doorbell, switch it on and choose the speakers, the sound and
+the volume. It then shows a private address. In UniFi Protect, open
+**Alarm Manager** and create an alarm: Activity **Ring**, Scope your
+doorbell, Action **Webhook**, method **POST**, and paste the address. Press
+the doorbell; "Recent rings" on the same sheet says what happened.
+
+The address is the only thing guarding the doorbell, since a doorbell cannot
+sign in. Keep it private. If it gets out, tap **Make a new address** and paste
+the new one into Protect.
+
 ## Things to know
 
 - **Line-out volume.** A Sonos Port or Connect feeding an amplifier may have
@@ -114,6 +128,12 @@ topic. Any webhook that accepts a plain-text POST works too.
 - **Alarm level.** Each speaker has an alarm level (tap its name in the
   Speakers list). Turn it down for a speaker that is much louder than the
   others at the same number.
+- **The doorbell plays an audio clip.** The music dips for it and carries on
+  by itself; nothing is regrouped. Sonos keeps clips between a floor and a
+  ceiling of its own, so the lowest and highest volumes may sound alike. A
+  speaker feeding an amplifier that wakes on sound may miss the start of it.
+  Two rings within 5 seconds count as one. A GET to the address never rings
+  (link previews fetch addresses); it is noted in "Recent rings" instead.
 - **Auto-stop pauses whatever is playing** on the alarm's speakers when its
   time is up, unless you tapped "I'm up — keep the music playing" or stopped
   the music from another app.
@@ -126,6 +146,8 @@ topic. Any webhook that accepts a plain-text POST works too.
     src/schedule.ts  Time-zone arithmetic, including clock changes.
     src/sonos.ts     The Sonos cloud API calls it uses.
     src/settle.ts    Covers for Sonos reporting grouping changes late.
+    src/doorbell.ts  The doorbell's settings and quiet hours.
+    src/dingdong.ts  The ding-dong, made as a WAV for the speakers to fetch.
     src/ui.html      The page, in one file.
     scripts/set-secrets.sh  Sets the Worker's secrets, one labelled prompt each.
 

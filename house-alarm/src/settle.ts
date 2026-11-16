@@ -100,7 +100,7 @@ export class SettlingGroups implements SonosClient {
   setVolume(playerId: string, volume: number) {
     return this.inner.setVolume(playerId, volume);
   }
-  chime(playerId: string, volume: number) {
-    return this.inner.chime(playerId, volume);
+  chime(playerId: string, volume: number, streamUrl?: string) {
+    return this.inner.chime(playerId, volume, streamUrl);
   }
 }

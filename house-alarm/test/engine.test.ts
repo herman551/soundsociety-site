@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { Engine, GRACE_MS, InputError, type Alarm, type Config, type Health, type Session } from "../src/engine";
+import type { Ring } from "../src/doorbell";
 import { SonosError, type Group, type SonosClient, type Store } from "../src/sonos";
 
 const SEC = 1000;
@@ -191,9 +192,12 @@ class FakeSonos implements SonosClient {
     this.calls.push(`vol:${NAMES[playerId]}:${volume}`);
     this.volume[playerId] = volume;
   }
-  async chime(playerId: string, volume: number) {
+  /** Sound addresses Sonos turns down. */
+  refusedSounds = new Set<string>();
+  async chime(playerId: string, volume: number, streamUrl?: string) {
     this.player(playerId);
-    this.calls.push(`chime:${NAMES[playerId]}@${volume}`);
+    if (streamUrl && this.refusedSounds.has(streamUrl)) throw new SonosError(400, "ERROR_INVALID_PARAMETER", "unsupported audio format");
+    this.calls.push(`chime:${NAMES[playerId]}@${volume}${streamUrl ? ` ${streamUrl}` : ""}`);
   }
 }
 
@@ -1135,5 +1139,148 @@ describe("what the page is told", () => {
       { id: "wake", name: "Wake Up", service: "Spotify" },
       { id: "radio", name: "KEXP", service: "TuneIn" },
     ]);
+  });
+});
+
+describe("the doorbell", () => {
+  const ORIGIN = "https://alarm.test";
+  const DING = `${ORIGIN}/sounds/ding-dong.wav`;
+  const ring = (token: string, method = "POST") => engine.doorbell(token, method, ORIGIN);
+  const rings = () => ((data.get("rings") as Ring[] | undefined) ?? []).map((r) => r.text);
+  /** Switch the doorbell on and return the secret in its address. */
+  const switchOn = async (patch: Record<string, unknown> = {}) => {
+    await engine.updateConfig({ doorbell: { enabled: true, playerIds: ["P1", "P2"], ...patch } });
+    sonos.calls = [];
+    return config().doorbell.token!;
+  };
+
+  it("rings its speakers at their alarm levels, over whatever is playing, without regrouping", async () => {
+    const token = await switchOn({ volume: 40 });
+    await engine.manage("trim", { id: "P2", trim: 50 });
+    const r = await ring(token);
+    expect(r).toEqual({ status: 200, text: "Doorbell: rang on House and Kitchen at 40." });
+    expect([...sonos.calls].sort()).toEqual([`chime:House@40 ${DING}`, `chime:Kitchen@20 ${DING}`]);
+    expect(sonos.layout()).toEqual(["House", "Kitchen", "Office"]);
+    expect(rings()).toEqual([r.text]);
+  });
+
+  it("starts out on every speaker that can play it, with an address of its own", async () => {
+    sonos.cannotChime.add("P3");
+    await engine.speakers();
+    await engine.updateConfig({ doorbell: { enabled: true } });
+    const d = config().doorbell;
+    expect(d.playerIds).toEqual(["P1", "P2"]);
+    expect(d.token).toMatch(/^[\w-]{32}$/);
+    await engine.updateConfig({ doorbell: { playerIds: ["P1", "P3"] } });
+    sonos.calls = [];
+    expect((await ring(d.token!)).text).toBe("Doorbell: rang on House at 35. Office cannot play doorbell sounds.");
+    expect(sonos.calls).toEqual([`chime:House@35 ${DING}`]);
+  });
+
+  it("turns away a wrong address, and never rings for a GET", async () => {
+    const token = await switchOn();
+    expect((await ring("x".repeat(32))).status).toBe(404);
+    expect((await ring(token, "GET")).status).toBe(405);
+    expect(sonos.calls).toEqual([]);
+    expect(rings()[0]).toMatch(/set its webhook to POST/);
+  });
+
+  it("rings once when a visitor presses twice", async () => {
+    const token = await switchOn({ playerIds: ["P1"] });
+    await ring(token);
+    now += 2 * SEC;
+    expect((await ring(token)).text).toBe("Already ringing.");
+    now += 4 * SEC;
+    await ring(token);
+    expect(sonos.count("chime:")).toBe(2);
+  });
+
+  it("rings softly in quiet hours, past midnight and out again, or not at all", async () => {
+    // It is 8 pm.
+    const token = await switchOn({ playerIds: ["P1"], volume: 40, quietFrom: "22:00", quietTo: "07:00", quietVolume: 10 });
+    await ring(token);
+    now += 3 * HOUR; // 11 pm
+    await ring(token);
+    now += 7.5 * HOUR; // 6:30 am
+    await ring(token);
+    now += HOUR; // 7:30 am
+    await ring(token);
+    expect(sonos.calls).toEqual([`chime:House@40 ${DING}`, `chime:House@10 ${DING}`, `chime:House@10 ${DING}`, `chime:House@40 ${DING}`]);
+
+    await engine.updateConfig({ doorbell: { quietVolume: 0 } });
+    now += 15 * HOUR; // 10:30 pm
+    sonos.calls = [];
+    expect((await ring(token)).text).toBe("Doorbell: quiet hours, so the speakers stayed silent.");
+    expect(sonos.calls).toEqual([]);
+  });
+
+  it("falls back to Sonos's own chime when a speaker won't take the sound", async () => {
+    const token = await switchOn({ playerIds: ["P1"] });
+    sonos.refusedSounds.add(DING);
+    const r = await ring(token);
+    expect(sonos.calls).toEqual(["chime:House@35"]);
+    expect(r.text).toBe("Doorbell: rang on House at 35. Sonos would not play the doorbell sound (unsupported audio format), so it played its own chime instead.");
+    expect(logText()).toContain("played its own chime instead");
+    expect(alerts).toEqual([]);
+  });
+
+  it("sends an alert when no speaker could play it, but not for one speaker missing", async () => {
+    const token = await switchOn();
+    sonos.offline.add("P2");
+    expect((await ring(token)).text).toBe("Doorbell: rang on House at 35. Kitchen did not: player is gone.");
+    expect(alerts).toEqual([]);
+    sonos.offline.add("P1");
+    now += 10 * SEC;
+    const r = await ring(token);
+    expect(r.text).toBe("Doorbell: no speaker played it. House did not: player is gone. Kitchen did not: player is gone.");
+    expect(alerts).toEqual([r.text]);
+  });
+
+  it("answers but stays silent while switched off, and keeps its address for later", async () => {
+    const token = await switchOn();
+    await engine.updateConfig({ doorbell: { enabled: false } });
+    expect(await ring(token)).toEqual({ status: 200, text: "The doorbell is switched off in House Alarm." });
+    expect(sonos.calls).toEqual([]);
+    await engine.updateConfig({ doorbell: { enabled: true } });
+    expect(config().doorbell.token).toBe(token);
+  });
+
+  it("can be given a new address, and the old one stops working", async () => {
+    const old = await switchOn();
+    await engine.updateConfig({ doorbell: { newAddress: true } });
+    const fresh = config().doorbell.token!;
+    expect(fresh).not.toBe(old);
+    expect((await ring(old)).status).toBe(404);
+    expect((await ring(fresh)).status).toBe(200);
+  });
+
+  it("rings from the page as a test, with Sonos's chime or a sound of your own", async () => {
+    await switchOn({ playerIds: ["P3"], sound: "url", soundUrl: "https://example.com/bell.mp3" });
+    expect(await engine.testDoorbell(ORIGIN)).toBe("Test ring: rang on Office at 35.");
+    await engine.updateConfig({ doorbell: { sound: "chime" } });
+    now += 10 * SEC;
+    await engine.testDoorbell(ORIGIN);
+    expect(sonos.calls).toEqual(["chime:Office@35 https://example.com/bell.mp3", "chime:Office@35"]);
+    expect(rings()).toEqual(["Test ring: rang on Office at 35.", "Test ring: rang on Office at 35."]);
+  });
+
+  it("rejects bad settings", async () => {
+    const bad = (doorbell: Record<string, unknown>) => expect(engine.updateConfig({ doorbell })).rejects.toBeInstanceOf(InputError);
+    await bad({ enabled: true, playerIds: [] });
+    await bad({ sound: "foghorn" });
+    await bad({ sound: "url" });
+    await bad({ sound: "url", soundUrl: "http://example.com/bell.mp3" });
+    await bad({ quietFrom: "22:00", quietTo: "22:00" });
+    await bad({ quietFrom: "22:00", quietTo: "late" });
+    expect(config().doorbell).toMatchObject({ enabled: false, token: null, sound: "dingdong", quietFrom: null });
+  });
+
+  it("is watched: the watcher says when none of its speakers is online, and forgetting one takes it off", async () => {
+    await switchOn({ playerIds: ["P2"] });
+    sonos.offline.add("P2");
+    await runFor(MIN);
+    expect(problems()).toContain("doorbell:silent");
+    await engine.manage("forget", { id: "P2" });
+    expect(config().doorbell.playerIds).toEqual([]);
   });
 });

@@ -75,7 +75,8 @@ export interface SonosClient {
   playbackState(groupId: string): Promise<string>;
   getVolume(playerId: string): Promise<Volume>;
   setVolume(playerId: string, volume: number): Promise<void>;
-  chime(playerId: string, volume: number): Promise<void>;
+  /** Play a short sound over whatever is playing: Sonos's chime, or the MP3 or WAV at `streamUrl`. */
+  chime(playerId: string, volume: number, streamUrl?: string): Promise<void>;
 }
 
 export class SonosError extends Error {
@@ -333,12 +334,15 @@ export class SonosApi implements SonosClient {
     });
   }
 
-  /** Sonos's built-in chime, played over whatever is (or is not) playing. */
-  async chime(playerId: string, volume: number) {
+  /**
+   * Sonos's built-in chime, or the sound at `streamUrl`, played over whatever is
+   * (or is not) playing. Sonos takes only MP3 or WAV, fetched by the speaker itself.
+   */
+  async chime(playerId: string, volume: number, streamUrl?: string) {
     await this.call("POST", `/players/${encodeURIComponent(playerId)}/audioClip`, {
       name: "House Alarm",
       appId: "com.housealarm.worker",
-      clipType: "CHIME",
+      ...(streamUrl ? { streamUrl } : { clipType: "CHIME" }),
       priority: "HIGH",
       volume: Math.max(1, Math.min(100, Math.round(volume))),
     });

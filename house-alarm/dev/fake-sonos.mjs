@@ -238,7 +238,7 @@ createServer(async (req, res) => {
       return send(res, 200, {});
     }
     if (pm[2] === "audioClip" && post) {
-      say(`chime ${nameOf(id)} at volume ${body.volume}`);
+      say(body.streamUrl ? `play ${body.streamUrl} on ${nameOf(id)} at volume ${body.volume}` : `chime ${nameOf(id)} at volume ${body.volume}`);
       return send(res, 200, { id: "clip", name: body.name, appId: body.appId });
     }
   }
