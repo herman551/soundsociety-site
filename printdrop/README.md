@@ -49,6 +49,9 @@ Also:
 
 ## Set up
 
+**Step-by-step for the Beelink EQ14 (from unboxing to the first print):
+[SETUP-EQ14.md](SETUP-EQ14.md).** The short version for any Linux box:
+
 ```sh
 git clone <this repository> printdrop
 cd printdrop/printdrop      # the folder with docker-compose.yml
