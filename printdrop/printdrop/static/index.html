@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PrintDrop</title>
+  <meta name="theme-color" content="#2457d6">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='11' width='26' height='12' rx='3' fill='%232457d6'/%3E%3Crect x='9' y='4' width='14' height='9' rx='1' fill='%23fff' stroke='%232457d6' stroke-width='2'/%3E%3Crect x='9' y='19' width='14' height='9' rx='1' fill='%23fff' stroke='%232457d6' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="11" width="26" height="12" rx="3"/><rect class="sheet" x="9" y="4" width="14" height="9" rx="1"/><rect class="sheet" x="9" y="19" width="14" height="9" rx="1"/></svg>
+      <div>
+        <h1>PrintDrop</h1>
+        <p id="printer-name" class="muted">Loading…</p>
+      </div>
+    </div>
+    <button id="status-pill" class="pill" type="button" aria-live="polite" aria-controls="printer-panel">
+      <span class="dot"></span><span class="pill-text">Checking printer…</span>
+    </button>
+  </header>
+
+  <main class="layout">
+    <section id="waiting" class="waiting" aria-labelledby="waiting-heading" hidden>
+      <h2 id="waiting-heading">Waiting for paper in the bypass tray</h2>
+      <p class="muted">Load the paper shown, slide the tray's guides against it, then tap Print now.</p>
+      <ul id="waiting-jobs" class="jobs"></ul>
+    </section>
+
+    <section class="card print-card" aria-labelledby="print-heading">
+      <h2 id="print-heading" class="sr-only">Print something</h2>
+
+      <label id="dropzone" class="dropzone" for="file-input" tabindex="0">
+        <input id="file-input" type="file" multiple hidden>
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 31V9m0 0-8 8m8-8 8 8" /><path d="M8 29v8a3 3 0 0 0 3 3h26a3 3 0 0 0 3-3v-8"/></svg>
+        <strong>Drop files here</strong>
+        <span class="muted">or <u>choose files</u> · <span id="types-hint">PDF works best</span></span>
+      </label>
+      <ul id="file-list" class="file-list" aria-live="polite"></ul>
+
+      <div class="block">
+        <h3>Paper</h3>
+        <div id="presets" class="chips" role="group" aria-label="Quick settings"></div>
+      </div>
+
+      <div class="grid">
+        <label class="field">
+          <span>Paper size</span>
+          <select id="opt-size"></select>
+        </label>
+        <label class="field">
+          <span>Tray</span>
+          <select id="opt-tray"></select>
+        </label>
+        <label class="field">
+          <span>Paper type</span>
+          <select id="opt-media"></select>
+        </label>
+        <div class="field">
+          <span id="color-label">Color</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="color-label">
+            <label><input type="radio" name="color" value="CMYK"><span>Color</span></label>
+            <label><input type="radio" name="color" value="Gray"><span>Black &amp; white</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <span id="sides-label">Sides</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="sides-label">
+            <label><input type="radio" name="sides" value="None"><span>1-sided</span></label>
+            <label><input type="radio" name="sides" value="DuplexNoTumble"><span>2-sided</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <span id="copies-label">Copies</span>
+          <div class="stepper" role="group" aria-labelledby="copies-label">
+            <button type="button" data-step="-1" aria-label="Fewer copies">−</button>
+            <input id="opt-copies" type="number" min="1" max="999" value="1" inputmode="numeric" aria-labelledby="copies-label">
+            <button type="button" data-step="1" aria-label="More copies">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="bypass-note" class="callout bypass" hidden>
+        <div class="callout-icon" aria-hidden="true">⇥</div>
+        <div>
+          <strong id="bypass-title">This goes through the bypass tray</strong>
+          <p id="bypass-text"></p>
+          <label class="check"><input id="opt-print-now" type="checkbox"> The paper's already loaded, print right away</label>
+        </div>
+      </div>
+
+      <details class="more">
+        <summary>More options</summary>
+        <div class="grid">
+          <label class="field">
+            <span>Pages</span>
+            <input id="opt-pages" type="text" placeholder="All, or e.g. 1-3, 5" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Size on the page</span>
+            <select id="opt-scaling">
+              <option value="fit">Fit to the paper</option>
+              <option value="none">Actual size</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>2-sided flip</span>
+            <select id="opt-flip">
+              <option value="DuplexNoTumble">Long edge (like a book)</option>
+              <option value="DuplexTumble">Short edge (like a notepad)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>If the paper doesn't match</span>
+            <select id="opt-policy">
+              <option value="PromptUser">Ask on the printer's screen</option>
+              <option value="NearestSizeAdjust">Use the closest size and scale</option>
+            </select>
+          </label>
+          <label class="field wide">
+            <span>Hold at the printer with a PIN (optional)</span>
+            <input id="opt-pin" type="password" inputmode="numeric" pattern="\d{4,8}" maxlength="8" placeholder="4–8 digits" autocomplete="off">
+            <small class="muted">For private documents. The job waits in the printer until you open Locked Print jobs on its screen and type this PIN.</small>
+          </label>
+        </div>
+      </details>
+
+      <div class="submit-row">
+        <label class="field name-field">
+          <span>Your name</span>
+          <input id="opt-user" type="text" maxlength="40" placeholder="So people know whose pages these are" autocomplete="name">
+        </label>
+        <button id="print-btn" class="primary" type="button" disabled>Print</button>
+      </div>
+      <p id="form-error" class="error" role="alert" hidden></p>
+    </section>
+
+    <aside class="side">
+      <section id="printer-panel" class="card printer-card" aria-labelledby="printer-heading" hidden>
+        <h2 id="printer-heading">Printer</h2>
+        <ul id="alerts" class="alerts"></ul>
+        <div id="trays" class="trays"></div>
+        <div id="toner" class="toner"></div>
+      </section>
+
+      <section class="card jobs-card" aria-labelledby="jobs-heading">
+        <h2 id="jobs-heading">Jobs</h2>
+        <ul id="jobs" class="jobs" aria-live="polite"></ul>
+        <p id="jobs-empty" class="muted empty">Nothing yet. Jobs show up here as they print.</p>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="foot muted">
+    <div id="folders-help" hidden></div>
+    <div class="links">
+      <a href="/sign" target="_blank" rel="noopener">Printable sign for the printer</a>
+      <a id="web-link" href="#" target="_blank" rel="noopener" hidden>Printer's own web page</a>
+    </div>
+  </footer>
+
+  <template id="job-template">
+    <li class="job">
+      <div class="job-main">
+        <div class="job-title"><span class="job-name"></span><span class="badge"></span></div>
+        <div class="job-meta muted"></div>
+        <div class="job-summary muted"></div>
+        <div class="job-message"></div>
+        <div class="job-load" hidden>
+          <div class="load-row"><span class="muted">Paper</span><strong class="load-size"></strong></div>
+          <div class="load-row"><span class="muted">Type</span><strong class="load-media"></strong></div>
+          <div class="load-row load-edge-row"><span class="muted">Feed</span><strong class="load-edge"></strong></div>
+        </div>
+      </div>
+      <div class="job-actions"></div>
+    </li>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

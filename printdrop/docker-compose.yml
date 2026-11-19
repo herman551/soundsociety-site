@@ -1,0 +1,13 @@
+services:
+  printdrop:
+    build: .
+    image: printdrop:latest
+    container_name: printdrop
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:8080"    # the web page: http://<this computer>/
+      - "445:445"    # drop folders (only used when SMB_ENABLED=1)
+    volumes:
+      - ./config:/config   # printdrop.yml lives here; edit it, then restart
+      - ./data:/data       # job history, uploads, drop folders

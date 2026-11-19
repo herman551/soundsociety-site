@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to print to the {{PRINTER}}</title>
+  <style>
+    @page { size: letter; margin: 0.6in; }
+    * { box-sizing: border-box; }
+    body { font: 15pt/1.4 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #111; margin: 0; background: #fff; }
+    .page { max-width: 7.3in; margin: 0 auto; padding: 0.3in 0; }
+    h1 { font-size: 34pt; line-height: 1.05; margin: 0 0 .1in; letter-spacing: -.01em; }
+    .lead { font-size: 16pt; color: #444; margin: 0 0 .3in; }
+    .hero { display: grid; grid-template-columns: 2.4in 1fr; gap: .35in; align-items: center; border: 3px solid #111; border-radius: .2in; padding: .25in; }
+    .qr svg { width: 100%; height: auto; display: block; }
+    .url { font-size: 22pt; font-weight: 700; word-break: break-all; margin: 0 0 .1in; }
+    ol { margin: .1in 0 0; padding-left: .3in; }
+    li { margin: .06in 0; }
+    h2 { font-size: 17pt; margin: .35in 0 .08in; }
+    .bypass { background: #fff3dc; border-radius: .15in; padding: .2in .25in; margin-top: .3in; }
+    .bypass p { margin: .05in 0; }
+    code { font: 13pt ui-monospace, Menlo, Consolas, monospace; background: #f1f1f1; padding: .02in .06in; border-radius: .04in; }
+    .folders p { margin: .05in 0; font-size: 13pt; }
+    .small { font-size: 11pt; color: #555; margin-top: .3in; }
+    .print-me { position: fixed; right: 1rem; top: 1rem; font: 600 12pt sans-serif; padding: .5rem 1rem; border-radius: .5rem; border: 0; background: #2457d6; color: #fff; cursor: pointer; }
+    @media print { .print-me { display: none; } }
+  </style>
+</head>
+<body>
+  <button class="print-me" onclick="window.print()">Print this sign</button>
+  <div class="page">
+    <h1>Print to this {{PRINTER}} without setting anything up</h1>
+    <p class="lead">No drivers, no IP addresses, no queue names. Works from a Mac, PC or phone on this network.</p>
+
+    <div class="hero">
+      <div class="qr">{{QR}}</div>
+      <div>
+        <p class="url">{{URL}}</p>
+        <ol>
+          <li>Open that address (or scan the code).</li>
+          <li>Drop in your file.</li>
+          <li>Tap a paper size and press <b>Print</b>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="bypass">
+      <p><b>Printing on {{BYPASS_PAPER}} from the bypass tray (the fold-out tray on the side)?</b></p>
+      <p>Your job waits for you. Load the paper, slide the guides against it, then tap <b>Print now</b> on the page. Your phone works for this.</p>
+    </div>
+
+    {{SMB}}
+
+    <p class="small">Problems? Check the page's status light first. It tells you if the printer is out of paper, jammed or offline.</p>
+  </div>
+</body>
+</html>

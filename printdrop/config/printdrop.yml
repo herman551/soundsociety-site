@@ -1,0 +1,187 @@
+# PrintDrop settings.
+#
+# The printer's address is NOT in this file. It goes in the .env file next to
+# docker-compose.yml (PRINTER=...), so this file can be shared without
+# leaking anything about your network.
+#
+# Edit, then restart PrintDrop:  docker compose restart
+
+printer:
+  # What people see at the top of the page.
+  display_name: Ricoh IM C3510
+  location: Copy room
+
+  # Optional link to the printer's own web page (Ricoh "Web Image Monitor"),
+  # shown in the page footer for whoever looks after the printer.
+  # Example: http://172.16.0.50/
+  web_url: ""
+
+  # Hardware actually installed on this machine. These names come from the
+  # Ricoh driver. Four paper drawers = the standard two plus "2Cassette".
+  installed:
+    OptionTray: 2Cassette            # NotInstalled | 1Cassette | LCT | 2Cassette
+    LargeCapacityTray: NotInstalled  # NotInstalled | Installed
+    # Stapler/finisher. The office Macs are set to "Finisher SR3260", but that
+    # is an IM C3500 part and the IM C3510 driver doesn't list it. If this
+    # machine really has a finisher, the IM C3510 one is FinRUBICOND (SR3310).
+    Finisher: NotInstalled
+
+  # Applied to every job unless the person printing picks something else.
+  job_defaults:
+    PageSize: auto        # auto = match the file's own page size
+    InputSlot: Auto
+    MediaType: Auto
+    ColorModel: CMYK      # CMYK = color, Gray = black & white
+    Duplex: None          # None | DuplexNoTumble (long edge) | DuplexTumble (short edge)
+    scaling: fit          # fit = shrink/grow to the paper, none = actual size
+    # What the printer does when the paper in the tray doesn't match:
+    #   PromptUser          stop and ask on the printer's screen (Ricoh default)
+    #   NearestSizeAdjust   use the closest size it has and scale to fit
+    #   NearestSizeNoAdjust use the closest size it has and crop
+    RIPaperPolicy: PromptUser
+
+# Paper size used when PageSize is "auto" and the file's size isn't a size
+# this printer knows (photos, odd-sized PDFs, Word documents set to A4, ...).
+fallback_page_size: Letter
+
+# When "match the file" finds one of these sizes, print on the size it maps
+# to instead, scaled to fit. Word and LibreOffice often save documents as A4;
+# this prints them on Letter instead of waiting for A4 in the bypass tray.
+match_substitutes:
+  A4: Letter
+  A3: Tabloid
+
+# Trays, in the order they appear in the menu. "id" must be a Ricoh driver
+# InputSlot value: Auto, 1Tray, 2Tray, 3Tray, 4Tray, 5Tray, MultiTray.
+# "paper" is the size you keep loaded in that drawer (a page_sizes id). It's
+# shown to people, and it's how PrintDrop knows that a size nobody keeps in
+# a drawer (12 x 18, envelopes...) has to go through the bypass tray.
+trays:
+  - id: Auto
+    label: Automatic
+    note: Picks the drawer with the right paper, or the bypass tray if none has it
+  - id: 1Tray
+    label: Tray 1
+    paper: Letter
+  - id: 2Tray
+    label: Tray 2
+    paper: Letter
+  - id: 3Tray
+    label: Tray 3
+    paper: Legal
+  - id: 4Tray
+    label: Tray 4
+    paper: Tabloid
+  - id: MultiTray
+    label: Bypass tray
+    note: Fold-out tray on the right side. For 13 × 10, cardstock, large or odd paper.
+    usual: 10x13       # what people normally load here (shown as a hint)
+    bypass: true
+
+# The bypass tray is where most printing goes wrong: someone sends a job,
+# the tray is empty or holds the wrong paper, and the Ricoh stops and waits,
+# blocking everyone else's printing. So by default PrintDrop holds bypass
+# jobs until the person is at the printer, has loaded the paper, and taps
+# "Print now" (from their phone or computer).
+bypass:
+  hold_until_released: true
+  # Held jobs nobody releases are canceled after this many hours.
+  hold_hours: 8
+  # Send jobs to the bypass tray automatically when the drawers can't do
+  # them (a size no drawer holds, or a paper type other than plain).
+  auto_route: true
+
+# Paper sizes offered in the menu. "id" is a Ricoh driver PageSize value, or
+# any name you like for a size the driver doesn't have, given with
+# width_in/height_in (custom sizes go through the bypass tray). For custom
+# sizes, width is the edge that goes into the printer first: the bypass tray
+# is at most 12.6 inches wide, so 13 × 10 paper feeds 10-inch edge first.
+page_sizes:
+  - id: Letter
+    label: Letter (8.5 × 11)
+  - id: 10x13
+    label: 13 × 10
+    width_in: 10
+    height_in: 13
+  - id: Legal
+    label: Legal (8.5 × 14)
+  - id: Tabloid
+    label: Tabloid (11 × 17)
+  - id: 12x18
+    label: 12 × 18
+  - id: Statement
+    label: Half letter (5.5 × 8.5)
+  - id: Executive
+    label: Executive (7.25 × 10.5)
+  - id: A4
+    label: A4
+  - id: A3
+    label: A3
+  - id: SRA3
+    label: SRA3 (12.6 × 17.7)
+  - id: Env10
+    label: "Envelope #10"
+
+# Paper types (Ricoh driver MediaType values). Thicker stock prints slower
+# and usually has to go through the bypass tray.
+media_types:
+  - id: Auto
+    label: Plain paper
+  - id: Middlethick
+    label: Heavy text (82–105 g/m², 22–28 lb bond)
+  - id: Thick1
+    label: Thick 1 (106–169 g/m², 28 lb bond – 60 lb cover)
+  - id: Thick2
+    label: Thick 2 (170–220 g/m², 65–80 lb cover)
+  - id: Thick3
+    label: Thick 3 (221–256 g/m², 85–95 lb cover)
+  - id: Thick4
+    label: Thick 4 (257–300 g/m², 100–110 lb cover)
+  - id: GlossCoated
+    label: Glossy coated
+  - id: MatCoated
+    label: Matte coated
+  - id: Labels
+    label: Labels
+  - id: Envelope
+    label: Envelope
+  - id: Letterhead
+    label: Letterhead
+  - id: Recycled
+    label: Recycled
+
+# One-tap settings. Each preset also becomes a drop folder on the network
+# share: drag a file into the folder named "folder" and it prints with these
+# settings. Any setting left out uses job_defaults.
+presets:
+  - name: Letter
+    folder: Letter
+    settings: { PageSize: Letter, InputSlot: Auto }
+  - name: 13 × 10 (bypass)
+    folder: Bypass - 13x10
+    settings: { PageSize: 10x13, InputSlot: MultiTray }
+  - name: 11 × 17
+    folder: Tabloid 11x17
+    settings: { PageSize: Tabloid, InputSlot: Auto }
+  - name: Legal
+    folder: Legal
+    settings: { PageSize: Legal, InputSlot: Auto }
+  - name: Black & white, 2-sided
+    folder: Letter - Black and White - 2-sided
+    settings: { PageSize: Letter, ColorModel: Gray, Duplex: DuplexNoTumble }
+  - name: Cardstock (bypass)
+    folder: Bypass - Letter Cardstock
+    settings: { PageSize: Letter, InputSlot: MultiTray, MediaType: Thick2 }
+  - name: 12 × 18 (bypass)
+    folder: Bypass - 12x18
+    settings: { PageSize: 12x18, InputSlot: MultiTray, MediaType: Thick1 }
+  - name: Match the file
+    folder: Match file size
+    settings: { PageSize: auto, InputSlot: Auto }
+
+# Keep uploaded files this many hours so people can reprint them, then delete
+# them. Locked (PIN) jobs are always deleted as soon as they reach the printer.
+retention_hours: 24
+
+# Largest file accepted, in megabytes.
+max_upload_mb: 200
